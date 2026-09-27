@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# maistro-send <task-id> <message...>
+# Types a message into a worker's live session (answers, review feedback, instructions).
+. "$(dirname "$0")/lib.sh"
+
+[ $# -ge 2 ] || die "usage: maistro-send <task-id> <message>"
+id="$1"; shift; valid_id "$id"; require_task "$id"
+window_alive "$id" || die "worker window for '$id' is not running"
+msg="$(printf '%s' "$*" | tr '\n' ' ')"
+target="=$(session_name):$id"
+tmux send-keys -t "$target" -l -- "Message from Maistro: $msg"
+sleep 0.5
+tmux send-keys -t "$target" Enter
+"$MAISTRO_BIN/maistro-report" "$id" note "maistro -> worker: $(printf '%s' "$msg" | cut -c1-160)"
+echo "sent to $id"

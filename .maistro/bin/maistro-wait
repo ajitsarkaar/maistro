@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# maistro-wait [--timeout SECONDS] [--all]
+# Blocks (without using any model tokens) until a worker needs Maistro, then prints the
+# new status lines and exits. Wakes on: needs-decision, blocked, done, failed, and
+# worker windows that closed before the task finished. --all wakes on every event.
+. "$(dirname "$0")/lib.sh"
+
+timeout=540; all=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --timeout) timeout="${2:-540}"; shift 2 ;;
+    --all) all=1; shift ;;
+    *) die "usage: maistro-wait [--timeout SECONDS] [--all]" ;;
+  esac
+done
+
+cur="$MAISTRO_STATE/.cursor"; mkdir -p "$cur"
+deadline=$(( $(date +%s) + timeout ))
+buffer=""; wake=0
+
+while :; do
+  if [ -d "$MAISTRO_TASKS" ]; then
+    for t in "$MAISTRO_TASKS"/*/; do
+      [ -d "$t" ] || continue
+      id="$(basename "$t")"; log="$t/status.log"
+      [ -f "$log" ] || continue
+      n="$(wc -l < "$log" | tr -d ' ')"; c=0
+      [ -f "$cur/$id" ] && c="$(cat "$cur/$id")"
+      if [ "$n" -gt "$c" ]; then
+        new="$(tail -n +"$((c + 1))" "$log" | head -n "$((n - c))")"
+        while IFS= read -r l; do
+          [ -n "$l" ] || continue
+          buffer+="$id"$'\t'"$l"$'\n'
+          v="$(printf '%s' "$l" | cut -f2)"
+          case "$v" in needs-decision|blocked|done|failed) wake=1 ;; esac
+          [ "$all" = 1 ] && wake=1
+        done <<< "$new"
+        printf '%s\n' "$n" > "$cur/$id"
+      fi
+      # A worker window that disappeared before the task finished is worth waking for.
+      v="$(last_verb "$id")"
+      case "$v" in done|failed|merged|torn-down|created|none) ;; *)
+        if [ -n "$(meta_get "$id" worktree)" ] && ! window_alive "$id" && [ ! -f "$cur/$id.exited" ]; then
+          buffer+="$id"$'\t'"$(now)"$'\t'"exited"$'\t'"worker window closed but the task never reported done"$'\n'
+          touch "$cur/$id.exited"; wake=1
+        fi ;;
+      esac
+    done
+  fi
+  if [ "$wake" = 1 ]; then printf '%s' "$buffer"; exit 0; fi
+  if [ "$(date +%s)" -ge "$deadline" ]; then
+    if [ -n "$buffer" ]; then printf '%s' "$buffer"; fi
+    printf 'maistro-wait: no action needed (timed out after %ss); re-arm to keep supervising\n' "$timeout"
+    exit 0
+  fi
+  sleep 5
+done

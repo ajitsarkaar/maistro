@@ -1,0 +1,3 @@
+# Runtime state and worker checkouts are local to each machine.
+state/
+worktrees/

@@ -1,0 +1,48 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(maistro-status)",
+      "Bash(maistro-status *)",
+      "Bash(maistro-wait)",
+      "Bash(maistro-wait *)",
+      "Bash(maistro-task *)",
+      "Bash(maistro-spawn *)",
+      "Bash(maistro-send *)",
+      "Bash(maistro-pr *)",
+      "Bash(maistro-doctor)",
+      "Bash(git status *)",
+      "Bash(git status)",
+      "Bash(git log *)",
+      "Bash(git diff *)",
+      "Bash(git show *)",
+      "Bash(git fetch *)",
+      "Bash(git fetch)",
+      "Bash(git branch *)",
+      "Bash(git worktree list *)",
+      "Bash(git worktree list)",
+      "Bash(gh pr view *)",
+      "Bash(gh pr diff *)",
+      "Bash(gh pr checks *)",
+      "Bash(gh pr list *)",
+      "Bash(gh issue *)",
+      "Read(**)",
+      "Edit(.maistro/state/**)",
+      "Write(.maistro/state/**)",
+      "Bash(maistro-config)",
+      "Bash(gh label *)",
+      "Edit(CONTEXT.md)",
+      "Write(CONTEXT.md)",
+      "Edit(docs/**)",
+      "Write(docs/**)"
+    ],
+    "deny": [
+      "Bash(gh pr merge *)",
+      "Bash(git push *)",
+      "Bash(git push)",
+      "Bash(git reset --hard *)",
+      "Bash(git checkout *)",
+      "Bash(git switch *)",
+      "Bash(git worktree remove *)"
+    ]
+  }
+}

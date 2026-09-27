@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# maistro-merge <task-id>
+# Merges a task's PR only if it is open, not a draft, conflict-free, and every check is
+# green at the current head. The merge is pinned to the verified head commit, so a push
+# that lands after the check cannot sneak in.
+# This command is intentionally NOT on Maistro's permission allowlist: Claude Code asks
+# the human before every merge.
+. "$(dirname "$0")/lib.sh"
+
+[ $# -eq 1 ] || die "usage: maistro-merge <task-id>"
+id="$1"; valid_id "$id"; require_task "$id"
+require gh "https://cli.github.com"; require jq
+url="$(meta_get "$id" pr)"; [ -n "$url" ] || die "no PR recorded for $id; run maistro-pr $id first"
+
+json="$(cd "$REPO_ROOT" && gh pr view "$url" --json state,isDraft,mergeable,headRefOid,statusCheckRollup)"
+state="$(jq -r .state <<<"$json")"
+[ "$state" = "OPEN" ] || die "PR is $state, not OPEN"
+[ "$(jq -r .isDraft <<<"$json")" = "false" ] || die "PR is a draft"
+mergeable="$(jq -r .mergeable <<<"$json")"
+case "$mergeable" in
+  MERGEABLE) ;;
+  CONFLICTING) die "PR has conflicts; ask the worker to merge origin/<base> into its branch and push" ;;
+  *) die "GitHub reports mergeable=$mergeable; retry in a moment" ;;
+esac
+total="$(jq '[.statusCheckRollup[]?] | length' <<<"$json")"
+bad="$(jq -r '[.statusCheckRollup[]? |
+          {n: (.name // .context // "check"),
+           r: (if ((.conclusion // "") != "") then .conclusion else (.state // .status // "PENDING") end)}
+        | select(.r != "SUCCESS" and .r != "SKIPPED" and .r != "NEUTRAL")
+        | "\(.n)=\(.r)"] | join(", ")' <<<"$json")"
+[ -z "$bad" ] || die "checks are not green: $bad"
+[ "$total" -gt 0 ] || info "warning: this PR has no CI checks; merging on review alone"
+
+sha="$(jq -r .headRefOid <<<"$json")"
+(cd "$REPO_ROOT" && gh pr merge "$url" "--$MAISTRO_MERGE_METHOD" --match-head-commit "$sha")
+"$MAISTRO_BIN/maistro-report" "$id" merged "$url @ ${sha:0:8}"
+has_origin && git -C "$REPO_ROOT" fetch --quiet origin 2>/dev/null || true
+echo "merged $url"

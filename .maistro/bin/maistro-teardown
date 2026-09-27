@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# maistro-teardown <task-id> [--force] [--delete-branch]
+# Closes the worker window and removes its worktree. Commits are never lost: they stay on
+# branch maistro/<id>. Refuses if the worktree has uncommitted changes unless --force.
+# --delete-branch also deletes the local branch, but only if it was merged or pushed.
+. "$(dirname "$0")/lib.sh"
+
+id=""; force=0; delbranch=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --force) force=1; shift ;;
+    --delete-branch) delbranch=1; shift ;;
+    -*) die "usage: maistro-teardown <task-id> [--force] [--delete-branch]" ;;
+    *) id="$1"; shift ;;
+  esac
+done
+valid_id "$id"; require_task "$id"
+wt="$(meta_get "$id" worktree)"; branch="$(meta_get "$id" branch)"
+
+if [ -n "$wt" ] && [ -d "$wt" ]; then
+  dirty="$(git -C "$wt" status --porcelain 2>/dev/null || true)"
+  if [ -n "$dirty" ] && [ "$force" != 1 ]; then
+    die "worktree has uncommitted changes (ask the worker to commit, or use --force to discard):
+$dirty"
+  fi
+fi
+
+if window_alive "$id"; then tmux kill-window -t "=$(session_name):$id"; fi
+
+if [ -n "$wt" ] && [ -d "$wt" ]; then
+  if [ "$force" = 1 ]; then git -C "$REPO_ROOT" worktree remove --force "$wt"
+  else git -C "$REPO_ROOT" worktree remove "$wt"; fi
+fi
+git -C "$REPO_ROOT" worktree prune
+
+if [ "$delbranch" = 1 ] && [ -n "$branch" ]; then
+  safe=0
+  [ "$(last_verb "$id")" = "merged" ] && safe=1
+  grep -q $'\tmerged\t' "$(task_dir "$id")/status.log" 2>/dev/null && safe=1
+  if has_origin && git -C "$REPO_ROOT" fetch --quiet origin "$branch" 2>/dev/null; then
+    [ "$(git -C "$REPO_ROOT" rev-parse "refs/heads/$branch")" = "$(git -C "$REPO_ROOT" rev-parse FETCH_HEAD)" ] && safe=1
+  fi
+  if [ "$safe" = 1 ]; then git -C "$REPO_ROOT" branch -D "$branch" >/dev/null && info "deleted local branch $branch"
+  else info "kept branch $branch (not merged or pushed)"; fi
+fi
+
+meta_set "$id" torn_down "$(now)"
+"$MAISTRO_BIN/maistro-report" "$id" torn-down "worktree removed; branch ${branch:-?} kept unless deleted above"
+echo "torn down $id"

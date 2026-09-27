@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(maistro-report *)",
+      "Bash(git status)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git diff)",
+      "Bash(git log *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git fetch *)",
+      "Bash(git fetch)",
+      "Bash(git merge origin/*)",
+      "Bash(git push -u origin maistro/*)",
+      "Bash(git push origin maistro/*)",
+      "Bash(git push)",
+      "Bash(maistro-config)"
+    ],
+    "deny": [
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(git push * --force*)",
+      "Bash(git push * -f)",
+      "Bash(git push origin main*)",
+      "Bash(git push origin master*)",
+      "Bash(git rebase *)",
+      "Bash(git checkout main*)",
+      "Bash(git checkout master*)",
+      "Bash(git switch *)",
+      "Bash(git worktree *)",
+      "Bash(git branch -D *)",
+      "Bash(gh pr merge *)"
+    ]
+  }
+}

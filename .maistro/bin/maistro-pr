@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# maistro-pr <task-id>
+# Opens (or finds) the pull request for a finished task. The worker's worklog becomes the
+# PR description, and "Closes #N" is added when the task is linked to an issue.
+. "$(dirname "$0")/lib.sh"
+
+[ $# -eq 1 ] || die "usage: maistro-pr <task-id>"
+id="$1"; valid_id "$id"; require_task "$id"
+require gh "https://cli.github.com"
+has_origin || die "no 'origin' remote; PRs need a GitHub remote"
+branch="$(meta_get "$id" branch)"; [ -n "$branch" ] || die "task $id was never spawned"
+base="$(meta_get "$id" base)"; base="${base:-$(base_branch)}"
+git -C "$REPO_ROOT" fetch --quiet origin "$branch" 2>/dev/null || die "branch $branch is not on origin yet (has the worker pushed?)"
+
+url="$(cd "$REPO_ROOT" && gh pr list --head "$branch" --state open --json url -q '.[0].url' 2>/dev/null || true)"
+if [ -z "$url" ]; then
+  title="$(meta_get "$id" title)"; title="${title:-maistro: $id}"
+  body="$(mktemp)"; trap 'rm -f "$body"' EXIT
+  if ! git -C "$REPO_ROOT" show "origin/$branch:$MAISTRO_WORKLOG_DIR/$id.md" > "$body" 2>/dev/null; then
+    printf 'Maistro task `%s`. (No worklog found at %s/%s.md.)\n' "$id" "$MAISTRO_WORKLOG_DIR" "$id" > "$body"
+  fi
+  issue="$(meta_get "$id" issue)"
+  [ -n "$issue" ] && printf '\n\nCloses #%s\n' "$issue" >> "$body"
+  url="$(cd "$REPO_ROOT" && gh pr create --head "$branch" --base "$base" --title "$title" --body-file "$body")"
+fi
+meta_set "$id" pr "$url"
+"$MAISTRO_BIN/maistro-report" "$id" pr "$url"
+printf '%s\n' "$url"

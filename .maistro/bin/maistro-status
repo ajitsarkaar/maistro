@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# maistro-status            one line per task
+# maistro-status <task-id>  details: meta, recent status, and the worker's live screen
+. "$(dirname "$0")/lib.sh"
+
+if [ $# -ge 1 ]; then
+  id="$1"; valid_id "$id"; require_task "$id"; d="$(task_dir "$id")"
+  printf '== %s ==\n' "$id"
+  for k in title issue base branch model effort pr worktree; do
+    v="$(meta_get "$id" "$k")"; [ -n "$v" ] && printf '%-9s %s\n' "$k:" "$v"
+  done
+  printf 'window:   %s\n' "$(window_alive "$id" && echo live || echo closed)"
+  printf '\n-- status log (last 15) --\n'
+  tail -n 15 "$d/status.log" 2>/dev/null || true
+  if window_alive "$id"; then
+    printf '\n-- worker screen (last 25 lines) --\n'
+    tmux capture-pane -p -t "=$(session_name):$id" -S -40 2>/dev/null | sed '/^[[:space:]]*$/d' | tail -n 25 || true
+  fi
+  exit 0
+fi
+
+if [ ! -d "$MAISTRO_TASKS" ] || [ -z "$(ls -A "$MAISTRO_TASKS" 2>/dev/null)" ]; then
+  echo "no tasks yet"; exit 0
+fi
+printf '%-28s %-15s %-7s %-17s %s\n' TASK STATUS WINDOW MODEL LAST-MESSAGE
+for t in "$MAISTRO_TASKS"/*/; do
+  [ -d "$t" ] || continue
+  id="$(basename "$t")"
+  line="$(tail -n 1 "$t/status.log" 2>/dev/null || true)"
+  verb="$(printf '%s' "$line" | cut -f2)"; msg="$(printf '%s' "$line" | cut -f3 | cut -c1-70)"
+  model="$(meta_get "$id" model)"; effort="$(meta_get "$id" effort)"
+  win="$(window_alive "$id" && echo live || echo -)"
+  printf '%-28s %-15s %-7s %-17s %s\n' "$id" "${verb:-none}" "$win" "${model:+$model/$effort}" "$msg"
+done

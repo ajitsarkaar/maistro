@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# maistro-task new <id> [--title T] [--issue N] [--base BRANCH]
+# maistro-task list
+# Creates a task folder with meta, a status log, and a brief from the template.
+. "$(dirname "$0")/lib.sh"
+shopt -u patsub_replacement 2>/dev/null || true
+
+usage() { die "usage: maistro-task new <id> [--title T] [--issue N] [--base BRANCH] | maistro-task list"; }
+cmd="${1:-}"; shift || true
+
+case "$cmd" in
+  list)
+    [ -d "$MAISTRO_TASKS" ] && ls -1 "$MAISTRO_TASKS" 2>/dev/null || true ;;
+  new)
+    id=""; title=""; issue=""; base=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --title) title="${2:-}"; shift 2 ;;
+        --issue) issue="${2#\#}"; shift 2 ;;
+        --base)  base="${2:-}"; shift 2 ;;
+        -*) usage ;;
+        *) id="$1"; shift ;;
+      esac
+    done
+    valid_id "$id"
+    d="$(task_dir "$id")"
+    [ ! -e "$d" ] || die "task already exists: $id"
+    base="${base:-$(base_branch)}"
+    title="${title:-$id}"
+    mkdir -p "$d"
+    { printf 'id=%s\n' "$id"; printf 'title=%s\n' "$title"; printf 'issue=%s\n' "$issue"
+      printf 'base=%s\n' "$base"; printf 'created=%s\n' "$(now)"; } > "$d/meta"
+    tpl="$(cat "$MAISTRO_HOME/templates/brief.md")"
+    tpl="${tpl//'{{ID}}'/$id}"
+    tpl="${tpl//'{{TITLE}}'/$title}"
+    tpl="${tpl//'{{ISSUE}}'/${issue:+#$issue}}"
+    tpl="${tpl//'{{BASE}}'/$base}"
+    printf '%s\n' "$tpl" > "$d/brief.md"
+    "$MAISTRO_BIN/maistro-report" "$id" created "$title"
+    printf '%s\n' "$d/brief.md" ;;
+  *) usage ;;
+esac

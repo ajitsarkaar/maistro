@@ -1,0 +1,7 @@
+{
+  "name": "maistro",
+  "description": "Engineering workflow skills bundled with maistro: grill, spec, tickets, TDD, code review, debugging, and merge-conflict resolution.",
+  "version": "0.2.0",
+  "author": { "name": "The maistro authors" },
+  "license": "MIT"
+}

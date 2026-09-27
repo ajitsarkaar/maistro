@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# maistro-report <task-id> <verb> <message...>
+# Appends one line to the task's status log. Workers use this to talk to Maistro.
+. "$(dirname "$0")/lib.sh"
+
+[ $# -ge 2 ] || die "usage: maistro-report <task-id> <verb> <message>
+verbs: working needs-decision blocked done failed note"
+id="$1"; verb="$2"; shift 2
+valid_id "$id"; require_task "$id"
+case "$verb" in
+  created|spawned|working|needs-decision|blocked|done|failed|note|pr|merged|torn-down) ;;
+  *) die "unknown verb '$verb' (working needs-decision blocked done failed note)" ;;
+esac
+msg="$(printf '%s' "$*" | tr '\n\t' '  ')"
+printf '%s\t%s\t%s\n' "$(now)" "$verb" "$msg" >> "$(task_dir "$id")/status.log"

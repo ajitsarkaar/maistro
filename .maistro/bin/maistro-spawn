@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# maistro-spawn <task-id> --model MODEL --effort EFFORT [--base BRANCH]
+# Creates a worktree on branch maistro/<id> and launches a worker session in a tmux window.
+# Use --effort default to omit the effort flag (e.g. for models without effort levels).
+# If branch maistro/<id> already exists (e.g. escalating a task), the worker continues on it.
+. "$(dirname "$0")/lib.sh"
+
+id=""; model=""; effort=""; base=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --model)  model="${2:-}"; shift 2 ;;
+    --effort) effort="${2:-}"; shift 2 ;;
+    --base)   base="${2:-}"; shift 2 ;;
+    -h|--help) die "usage: maistro-spawn <task-id> --model MODEL --effort EFFORT [--base BRANCH]" ;;
+    -*) die "unknown flag: $1" ;;
+    *) id="$1"; shift ;;
+  esac
+done
+valid_id "$id"; require_task "$id"
+[ -n "$model" ]  || die "--model is required (see .maistro/config/dispatch.md)"
+[ -n "$effort" ] || die "--effort is required (low|medium|high|xhigh|max|default)"
+require git; require tmux; require claude "https://code.claude.com"
+
+d="$(task_dir "$id")"
+[ -s "$d/brief.md" ] || die "brief is empty: $d/brief.md"
+branch="maistro/$id"
+wt="$MAISTRO_WORKTREES/$id"
+[ ! -e "$wt" ] || die "worktree already exists: $wt (run maistro-teardown $id first)"
+window_alive "$id" && die "a tmux window named '$id' is already running"
+
+# Respect the parallelism cap.
+live=0
+if [ -d "$MAISTRO_TASKS" ]; then
+  for t in "$MAISTRO_TASKS"/*/; do
+    [ -d "$t" ] || continue
+    if window_alive "$(basename "$t")"; then live=$((live + 1)); fi
+  done
+fi
+[ "$live" -lt "$MAISTRO_MAX_PARALLEL" ] || die "parallel cap reached ($live/$MAISTRO_MAX_PARALLEL live workers); wait or raise MAISTRO_MAX_PARALLEL"
+
+base="${base:-$(meta_get "$id" base)}"; base="${base:-$(base_branch)}"
+mkdir -p "$MAISTRO_WORKTREES"
+if git -C "$REPO_ROOT" show-ref --verify --quiet "refs/heads/$branch"; then
+  git -C "$REPO_ROOT" worktree add --quiet "$wt" "$branch"
+  start="existing $branch"
+else
+  start="$base"
+  if has_origin; then
+    if git -C "$REPO_ROOT" fetch --quiet origin "$base" 2>/dev/null; then start="origin/$base"
+    else info "could not fetch origin/$base; branching from local $base"; fi
+  fi
+  git -C "$REPO_ROOT" worktree add --quiet -b "$branch" "$wt" "$start"
+fi
+
+hook="$MAISTRO_HOME/config/setup-worktree.sh"
+if [ -x "$hook" ]; then
+  "$hook" "$wt" "$REPO_ROOT" || die "setup-worktree.sh failed; worktree left at $wt for inspection"
+fi
+
+meta_set "$id" branch "$branch"
+meta_set "$id" worktree "$wt"
+meta_set "$id" base "$base"
+meta_set "$id" model "$model"
+meta_set "$id" effort "$effort"
+meta_set "$id" spawned "$(now)"
+rm -f "$MAISTRO_STATE/.cursor/$id.exited"
+
+ensure_session
+s="$(session_name)"
+prompt="You are the Maistro worker for task '$id'. Your brief is at $d/brief.md. Read it, then begin."
+cmd=(claude --model "$model")
+[ "$effort" = "default" ] || cmd+=(--effort "$effort")
+cmd+=(--permission-mode "$MAISTRO_WORKER_PERMISSION_MODE"
+      --settings "$MAISTRO_HOME/config/worker-settings.json"
+      --append-system-prompt-file "$MAISTRO_HOME/prompts/worker.md"
+      --add-dir "$d"
+      --plugin-dir "$MAISTRO_HOME/plugin"
+      --name "maistro-$id"
+      "$prompt")
+# Set PATH inside the command: some shells reset a PATH passed through tmux -e.
+shell_cmd="export PATH=$(printf '%q' "$MAISTRO_BIN:$PATH"); $(printf '%q ' "${cmd[@]}"); exec \"\${SHELL:-bash}\""
+
+tmux new-window -d -t "=$s:" -n "$id" -c "$wt" \
+  -e "MAISTRO_HOME=$MAISTRO_HOME" \
+  -e "MAISTRO_TASK_ID=$id" \
+  -e "MAISTRO_TASK_DIR=$d" \
+  -e "MAISTRO_WORKLOG_DIR=$MAISTRO_WORKLOG_DIR" \
+  "$shell_cmd"
+
+"$MAISTRO_BIN/maistro-report" "$id" spawned "$model/$effort on $branch from $start"
+printf 'spawned %s: %s/%s, branch %s, tmux window %s:%s\n' "$id" "$model" "$effort" "$branch" "$s" "$id"

@@ -1,5 +1,5 @@
 {
-  "name": "maistro-cli",
+  "name": "@ajitsarkaar/maistro",
   "version": "0.3.0",
   "description": "One agent to rule them all: talk to one Claude Code agent that plans the work and conducts a crew of parallel workers, each in its own git worktree.",
   "bin": {

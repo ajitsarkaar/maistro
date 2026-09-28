@@ -57,16 +57,16 @@ Every worker leaves a short worklog on its branch, which becomes the PR descript
 From the root of your project (any git repository):
 
 ```bash
-npx maistro-cli init        # installs .maistro/ into this repo
-npx maistro-cli doctor      # checks tmux, Claude Code, gh, and your config
+npx @ajitsarkaar/maistro init        # installs .maistro/ into this repo
+npx @ajitsarkaar/maistro doctor      # checks tmux, Claude Code, gh, and your config
 git add .maistro && git commit -m "Add maistro"
-npx maistro-cli             # starts Maistro in tmux
+npx @ajitsarkaar/maistro             # starts Maistro in tmux
 ```
 
 Prefer a shorter command? Install it globally once, then use `maistro` everywhere:
 
 ```bash
-npm install -g maistro-cli
+npm install -g @ajitsarkaar/maistro
 maistro init
 maistro
 ```
@@ -220,7 +220,7 @@ Maistro uses these itself; they're also handy for you.
 ## Upgrading
 
 ```bash
-npx maistro-cli@latest upgrade      # or: maistro upgrade (after npm update -g maistro-cli)
+npx @ajitsarkaar/maistro@latest upgrade      # or: maistro upgrade (after npm update -g @ajitsarkaar/maistro)
 ```
 
 This replaces maistro's scripts, prompts, templates, and skills. Your `config/` is kept;

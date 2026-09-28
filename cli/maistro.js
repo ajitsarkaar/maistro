@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// maistro-cli: install maistro into a git repository, keep it up to date, and run it.
+// @ajitsarkaar/maistro (the maistro CLI): install maistro into a git repository, keep it up to date, and run it.
 //
 //   maistro init [path]      install .maistro/ into the repo containing [path] (default: here)
 //   maistro upgrade [path]   refresh scripts, prompts, templates and skills; keep your config
@@ -91,10 +91,10 @@ function init(arg) {
   out(`maistro ${VERSION} installed in ${dest}\n`);
   out('Next steps:');
   out(`  cd ${root}`);
-  out('  npx maistro-cli doctor                        check dependencies');
+  out('  npx @ajitsarkaar/maistro doctor          # check dependencies');
   out('  git add .maistro && git commit -m "Add maistro"');
-  out('  npx maistro-cli                               start Maistro in tmux\n');
-  out('Tip: "npm install -g maistro-cli" lets you type just "maistro".');
+  out('  npx @ajitsarkaar/maistro                 # start Maistro in tmux\n');
+  out('Tip: "npm install -g @ajitsarkaar/maistro" lets you type just "maistro".');
 }
 
 function upgrade(arg) {
@@ -136,7 +136,7 @@ function runInRepo(args) {
   const root = repoRoot(process.cwd());
   const launcher = root && path.join(root, '.maistro', 'bin', 'maistro');
   if (!launcher || !fs.existsSync(launcher)) {
-    fail('maistro is not installed in this repository (run: npx maistro-cli init)');
+    fail('maistro is not installed in this repository (run: npx @ajitsarkaar/maistro init)');
   }
   const r = spawnSync(launcher, args, { stdio: 'inherit' });
   if (r.error) fail(r.error.message);

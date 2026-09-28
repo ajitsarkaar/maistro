@@ -1,4 +1,4 @@
-# Publishes maistro-cli to npm when you push a version tag (e.g. v0.3.0).
+# Publishes @ajitsarkaar/maistro to npm when you push a version tag (e.g. v0.3.0).
 # One-time setup: create an npm "Automation" token and add it to this repo as the
 # NPM_TOKEN secret (Settings > Secrets and variables > Actions).
 name: Publish to npm

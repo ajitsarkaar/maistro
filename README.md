@@ -1,3 +1,5 @@
+![maistro_image](assets/maistro.jpeg)
+
 # maistro
 
 **One agent to rule them all.** Talk to one agent; it conducts a crew of them.

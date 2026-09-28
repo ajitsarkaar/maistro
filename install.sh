@@ -54,7 +54,8 @@ if [ "$upgrade" = 1 ]; then
 else
   (cd "$src" && tar --exclude='.maistro/state' --exclude='.maistro/worktrees' -cf - .maistro) | (cd "$root" && tar -xf -)
 fi
-chmod +x "$dest"/bin/* "$dest/config/setup-worktree.sh" 2>/dev/null || true
+chmod +x "$dest"/bin/* "$dest"/bin/harness/* "$dest/config/setup-worktree.sh" 2>/dev/null || true
+sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' "$src/package.json" 2>/dev/null | head -n 1 > "$dest/VERSION" || true
 
 if [ "$upgrade" = 1 ]; then
   echo "maistro upgraded in $dest"

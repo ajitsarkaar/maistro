@@ -1,0 +1,29 @@
+# Publishes maistro-cli to npm when you push a version tag (e.g. v0.3.0).
+# One-time setup: create an npm "Automation" token and add it to this repo as the
+# NPM_TOKEN secret (Settings > Secrets and variables > Actions).
+name: Publish to npm
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  id-token: write   # lets npm show a verified provenance badge
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Check the tag matches package.json
+        run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+      - name: Lint shell scripts
+        run: sudo apt-get install -y shellcheck && shellcheck -x -S warning install.sh .maistro/bin/lib.sh .maistro/bin/maistro* .maistro/bin/harness/*.sh
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

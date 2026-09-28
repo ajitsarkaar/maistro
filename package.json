@@ -1,0 +1,44 @@
+{
+  "name": "maistro-cli",
+  "version": "0.3.0",
+  "description": "One agent to rule them all: talk to one Claude Code agent that plans the work and conducts a crew of parallel workers, each in its own git worktree.",
+  "bin": {
+    "maistro": "cli/maistro.js"
+  },
+  "files": [
+    "cli/",
+    ".maistro/bin/",
+    ".maistro/config/",
+    ".maistro/plugin/",
+    ".maistro/prompts/",
+    ".maistro/templates/",
+    "install.sh"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "keywords": [
+    "claude",
+    "claude-code",
+    "ai-agents",
+    "multi-agent",
+    "orchestration",
+    "git-worktree",
+    "tmux",
+    "developer-tools"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ajitsarkaar/maistro.git"
+  },
+  "homepage": "https://github.com/ajitsarkaar/maistro#readme",
+  "bugs": {
+    "url": "https://github.com/ajitsarkaar/maistro/issues"
+  },
+  "author": "ajitsarkaar",
+  "license": "MIT"
+}

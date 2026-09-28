@@ -49,28 +49,32 @@ Every worker leaves a short worklog on its branch, which becomes the PR descript
 - [Claude Code](https://code.claude.com), logged in. maistro runs on Claude Code today;
   other coding agents are on the roadmap.
 - `git`, `tmux`, and `bash` 4+ (macOS or Linux; on Windows, use WSL)
+- Node.js 18+ for the `npx` installer (optional: there's a shell installer too)
 - For pull requests: the [GitHub CLI](https://cli.github.com) (`gh auth login`) and `jq`
 
 ## Install
 
-From the root of your project:
+From the root of your project (any git repository):
+
+```bash
+npx maistro-cli init        # installs .maistro/ into this repo
+npx maistro-cli doctor      # checks tmux, Claude Code, gh, and your config
+git add .maistro && git commit -m "Add maistro"
+npx maistro-cli             # starts Maistro in tmux
+```
+
+Prefer a shorter command? Install it globally once, then use `maistro` everywhere:
+
+```bash
+npm install -g maistro-cli
+maistro init
+maistro
+```
+
+No Node? The shell installer does the same thing:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ajitsarkaar/maistro/main/install.sh | bash
-```
-
-Or from a clone:
-
-```bash
-git clone https://github.com/ajitsarkaar/maistro && ./maistro/install.sh path/to/your/repo
-```
-
-Then:
-
-```bash
-.maistro/bin/maistro doctor              # check dependencies
-git add .maistro && git commit -m "Add maistro"
-.maistro/bin/maistro                     # start Maistro
 ```
 
 **Commit `.maistro/`.** Workers run in worktrees made from your committed history, and
@@ -185,6 +189,7 @@ Maistro uses these itself; they're also handy for you.
 
 | Command | Description |
 |---|---|
+| `maistro init` / `maistro upgrade` | Install maistro into a repo, or update it |
 | `maistro` | Start Maistro in tmux, or attach if it's running |
 | `maistro status [id]` | Task overview, or details plus the worker's live screen |
 | `maistro doctor` | Check dependencies and configuration |
@@ -215,11 +220,12 @@ Maistro uses these itself; they're also handy for you.
 ## Upgrading
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ajitsarkaar/maistro/main/install.sh | bash -s -- --upgrade
+npx maistro-cli@latest upgrade      # or: maistro upgrade (after npm update -g maistro-cli)
 ```
 
-This replaces scripts, prompts, and templates. Your `config/` is kept; newer defaults are
-saved beside it as `*.new` for you to compare.
+This replaces maistro's scripts, prompts, templates, and skills. Your `config/` is kept;
+if a default changed, the new version is saved beside yours as `*.new` for you to compare.
+Your plans and any running tasks are never touched.
 
 ## Roadmap
 

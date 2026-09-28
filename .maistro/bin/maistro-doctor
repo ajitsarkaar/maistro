@@ -8,6 +8,7 @@ warn() { printf '  warn  %s\n' "$*"; }
 bad()  { printf '  FAIL  %s\n' "$*"; fail=1; }
 
 echo "maistro doctor: $REPO_ROOT"
+[ -f "$MAISTRO_HOME/VERSION" ] && echo "maistro version: $(cat "$MAISTRO_HOME/VERSION")"
 echo "required:"
 git -C "$REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1 && ok "git repository" || bad "not a git repository"
 load_harness

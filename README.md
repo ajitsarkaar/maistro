@@ -36,14 +36,16 @@ Every worker leaves a short worklog on its branch, which becomes the PR descript
   `.maistro/config/dispatch.md`, so you can tune the cost/quality trade-off.
 - **Safe by construction.** Maistro can't edit your code, push, or switch branches. Merges
   require a green, conflict-free PR *and* your approval at a Claude Code permission prompt.
-- **One folder.** Everything lives in `.maistro/`. Nothing else in your repo changes.
-- **Batteries included.** A bundled skill set covers the whole workflow, from grilling an
-  idea into a spec to test-driven implementation and two-axis code review.
-- **Plain bash.** About 650 lines of readable shell. No daemon, no database, no build step.
+- **One folder.** The tool lives in `.maistro/`. Your plans live in a visible `plans/`
+  folder next to your code, as plain markdown you can read, edit, and review.
+- **Batteries included.** A bundled skill set covers the whole workflow, from planning an
+  idea into a spec and tickets to test-driven implementation and two-axis code review.
+- **Plain bash.** About 830 lines of readable shell. No daemon, no database, no build step.
 
 ## Requirements
 
-- [Claude Code](https://code.claude.com), logged in
+- [Claude Code](https://code.claude.com), logged in. maistro runs on Claude Code today;
+  other coding agents are on the roadmap.
 - `git`, `tmux`, and `bash` 4+ (macOS or Linux; on Windows, use WSL)
 - For pull requests: the [GitHub CLI](https://cli.github.com) (`gh auth login`) and `jq`
 
@@ -78,9 +80,9 @@ branch, and helps you fill in `setup-worktree.sh` so fresh worktrees can run you
 
 ## How a feature flows
 
-1. **Align.** Describe what you want, then run `/maistro:grill-with-docs`. Maistro
-   interviews you until nothing is left to guess, then writes a spec and breaks it into
-   tickets with dependencies (`to-spec`, `to-tickets`).
+1. **Plan.** Run `/maistro:plan` and describe what you want. Maistro interviews you one
+   question at a time until nothing is left to guess, then writes a spec and a set of
+   tickets with dependencies into `plans/`.
 2. **Plan a wave.** Maistro takes every ticket that isn't blocked, picks a model and effort
    for each, and checks that parallel tasks won't touch the same files. It shows you the
    plan and waits for your go.
@@ -91,6 +93,41 @@ branch, and helps you fill in `setup-worktree.sh` so fresh worktrees can run you
    diff against the brief, and sends feedback to the worker if needed.
 6. **Merge.** You approve; Maistro merges and cleans up, then plans the next wave.
 
+## Planning, locally
+
+Plans are plain files in your repo, so they're versioned, reviewable, and readable by
+humans and agents alike:
+
+```
+plans/
+├── csv-export/
+│   ├── spec.md                       what we're building and why
+│   └── tickets/
+│       ├── 01-export-endpoint.md
+│       ├── 02-export-button.md
+│       └── 03-large-file-streaming.md
+└── decisions/
+    └── 0001-stream-large-exports.md  decisions worth remembering
+CONTEXT.md                            the project's shared vocabulary
+```
+
+Each ticket starts with a small header that maistro keeps up to date:
+
+```markdown
+---
+id: 03
+title: Stream exports larger than 10 MB
+status: todo            # todo → in-progress → in-review → done (or dropped)
+blocked_by: 01
+task:
+pr:
+---
+```
+
+`maistro-ticket list` shows every ticket; `maistro-ticket frontier` shows the ones ready to
+start. When Maistro dispatches a ticket it becomes `in-progress`, its PR moves it to
+`in-review`, and merging marks it `done`. Commit `plans/` like any other code.
+
 ## Bundled skills
 
 maistro ships its own skills as a Claude Code plugin inside `.maistro/plugin/`. They're
@@ -99,10 +136,9 @@ nothing added to your global Claude Code setup.
 
 | Skill | Started by | What it does |
 |---|---|---|
-| `/maistro:grill` | you | Interviews you one question at a time until every open question in a plan is resolved |
-| `/maistro:grill-with-docs` | you | A grill that also builds a shared vocabulary in `CONTEXT.md` and records decisions as ADRs |
-| `to-spec` | you or Maistro | Turns the conversation into a spec, published as a GitHub issue or a markdown file |
-| `to-tickets` | you or Maistro | Splits a spec into thin vertical-slice tickets with blocking edges, ready for parallel workers |
+| `/maistro:plan` | you | Interviews you one question at a time, builds the glossary and decision records, then writes the spec and tickets |
+| `to-spec` | Maistro | Writes the agreed plan as `plans/<plan>/spec.md` |
+| `to-tickets` | Maistro | Splits a spec into thin vertical-slice tickets with blockers, one file each, ready for parallel workers |
 | `/maistro:implement` | you | Builds a spec or ticket in the current session, without dispatching workers |
 | `/maistro:handoff` | you | Compresses a long session into a handoff document for a fresh one |
 | `tdd` | workers | Red-green-refactor, one vertical slice at a time |
@@ -110,9 +146,7 @@ nothing added to your global Claude Code setup.
 | `diagnosing-bugs` | workers | Reproduce, minimize, hypothesize, instrument, fix, and add a regression test |
 | `resolving-merge-conflicts` | workers | Resolves conflicts hunk by hunk by reading both sides' intent; merges, never rebases |
 
-Specs and tickets go to GitHub issues when your repo is on GitHub and `gh` is logged in,
-and to markdown files under `docs/` otherwise (set `MAISTRO_TRACKER` to choose). You can
-edit or add skills in `.maistro/plugin/skills/` like any other file.
+You can edit or add skills in `.maistro/plugin/skills/` like any other file.
 
 ## Using tmux
 
@@ -153,14 +187,16 @@ Maistro uses these itself; they're also handy for you.
 | `maistro status [id]` | Task overview, or details plus the worker's live screen |
 | `maistro doctor` | Check dependencies and configuration |
 | `maistro stop` | Close the session (worktrees and branches are kept) |
-| `maistro-task new <id>` | Create a task and its brief |
+| `maistro-task new <id> --ticket <plan>/<id>` | Create a task from a ticket (the ticket and spec go into the brief) |
 | `maistro-spawn <id> --model M --effort E` | Start a worker |
 | `maistro-wait` | Block until a worker needs attention |
 | `maistro-send <id> <msg>` | Message a worker |
 | `maistro-pr <id>` | Open the task's pull request |
 | `maistro-merge <id>` | Merge if open, conflict-free, and green (pinned to the verified head) |
 | `maistro-teardown <id>` | Close the worker and remove its worktree (commits stay on the branch) |
-| `maistro-config` | Show resolved settings: base branch, tracker, where specs and worklogs go |
+| `maistro-ticket list\|frontier` | All tickets, or just the ones ready to start |
+| `maistro-ticket set <plan>/<id> status=...` | Update a ticket by hand |
+| `maistro-config` | Show resolved settings: base branch, harness, where plans and worklogs go |
 
 ## Safety model
 
@@ -185,10 +221,13 @@ saved beside it as `*.new` for you to compare.
 
 ## Roadmap
 
+- **More coding agents.** Everything agent-specific lives in one adapter,
+  `.maistro/bin/harness/claude-code.sh`, so adding Codex, OpenCode, and others means
+  adding one file each.
+- **Issue trackers.** Sync `plans/` tickets with GitHub Issues, then Linear and others.
 - `claude --bg` background sessions as an alternative to tmux
 - A turn-end hook so Maistro re-arms supervision automatically
-- Multi-repo crews
-- GitLab support
+- Multi-repo crews and GitLab support
 
 ## Credits
 
@@ -196,7 +235,7 @@ maistro stands on the shoulders of two projects:
 
 - **[Matt Pocock's skills](https://github.com/mattpocock/skills)** (MIT). maistro's
   bundled skills are modelled on the engineering workflow Matt designed and popularized:
-  grilling sessions, a shared-language `CONTEXT.md`, specs and tracer-bullet tickets with
+  grilling sessions (maistro's `plan`), a shared-language `CONTEXT.md`, specs and tracer-bullet tickets with
   blocking edges, red-green-refactor TDD, two-axis code review, disciplined bug diagnosis,
   intent-based merge-conflict resolution, and handoffs. The skill texts in maistro are
   original adaptations for a multi-agent setting, not copies. If you work in a single

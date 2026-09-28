@@ -1,22 +1,24 @@
 #!/usr/bin/env bash
-# maistro-task new <id> [--title T] [--issue N] [--base BRANCH]
+# maistro-task new <id> [--ticket PLAN/ID] [--title T] [--base BRANCH]
 # maistro-task list
 # Creates a task folder with meta, a status log, and a brief from the template.
+# With --ticket, the ticket (and its plan's spec) is copied into the brief and the ticket
+# is marked in-progress.
 . "$(dirname "$0")/lib.sh"
 shopt -u patsub_replacement 2>/dev/null || true
 
-usage() { die "usage: maistro-task new <id> [--title T] [--issue N] [--base BRANCH] | maistro-task list"; }
+usage() { die "usage: maistro-task new <id> [--ticket PLAN/ID] [--title T] [--base BRANCH] | maistro-task list"; }
 cmd="${1:-}"; shift || true
 
 case "$cmd" in
   list)
     [ -d "$MAISTRO_TASKS" ] && ls -1 "$MAISTRO_TASKS" 2>/dev/null || true ;;
   new)
-    id=""; title=""; issue=""; base=""
+    id=""; title=""; ticket=""; base=""
     while [ $# -gt 0 ]; do
       case "$1" in
         --title) title="${2:-}"; shift 2 ;;
-        --issue) issue="${2#\#}"; shift 2 ;;
+        --ticket) ticket="${2:-}"; shift 2 ;;
         --base)  base="${2:-}"; shift 2 ;;
         -*) usage ;;
         *) id="$1"; shift ;;
@@ -26,16 +28,30 @@ case "$cmd" in
     d="$(task_dir "$id")"
     [ ! -e "$d" ] || die "task already exists: $id"
     base="${base:-$(base_branch)}"
+    tfile=""
+    if [ -n "$ticket" ]; then
+      tfile="$("$MAISTRO_BIN/maistro-ticket" path "$ticket")"
+      [ -n "$title" ] || title="$(awk -F': *' '/^title:/{sub(/^title: */,""); print; exit}' "$tfile")"
+    fi
     title="${title:-$id}"
     mkdir -p "$d"
-    { printf 'id=%s\n' "$id"; printf 'title=%s\n' "$title"; printf 'issue=%s\n' "$issue"
+    { printf 'id=%s\n' "$id"; printf 'title=%s\n' "$title"; printf 'ticket=%s\n' "$ticket"
       printf 'base=%s\n' "$base"; printf 'created=%s\n' "$(now)"; } > "$d/meta"
     tpl="$(cat "$MAISTRO_HOME/templates/brief.md")"
     tpl="${tpl//'{{ID}}'/$id}"
     tpl="${tpl//'{{TITLE}}'/$title}"
-    tpl="${tpl//'{{ISSUE}}'/${issue:+#$issue}}"
+    tpl="${tpl//'{{TICKET}}'/${ticket:-none}}"
     tpl="${tpl//'{{BASE}}'/$base}"
     printf '%s\n' "$tpl" > "$d/brief.md"
+    if [ -n "$tfile" ]; then
+      spec="$(dirname "$(dirname "$tfile")")/spec.md"
+      [ -f "$spec" ] && cp "$spec" "$d/spec.md"
+      { printf '\n## Source ticket (%s)\n\n' "$ticket"
+        awk 'NR==1 && $0=="---" {fm=1; next} fm && $0=="---" {fm=0; next} !fm' "$tfile"
+        [ -f "$spec" ] && printf '\nThe full spec for this plan is in spec.md, next to this brief.\n'
+      } >> "$d/brief.md"
+      "$MAISTRO_BIN/maistro-ticket" set "$ticket" status=in-progress task="$id" >/dev/null
+    fi
     "$MAISTRO_BIN/maistro-report" "$id" created "$title"
     printf '%s\n' "$d/brief.md" ;;
   *) usage ;;

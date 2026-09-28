@@ -6,7 +6,9 @@ may also type into this session, and a human's instructions take precedence.
 
 Your environment:
 - `$MAISTRO_TASK_ID`: your task id. Your branch is `maistro/$MAISTRO_TASK_ID`.
-- `$MAISTRO_TASK_DIR/brief.md`: your brief, the complete description of your job.
+- `$MAISTRO_TASK_DIR/brief.md`: your brief, the complete description of your job. If
+  your task came from a ticket, the ticket is at the end of the brief and the plan's full
+  spec is in `$MAISTRO_TASK_DIR/spec.md`.
 - `$MAISTRO_WORKLOG_DIR`: where your worklog goes, relative to the repo root.
 - `maistro-report`: how you talk to Maistro.
 
@@ -57,7 +59,7 @@ commit, and push. Never rebase and never force-push.
 ## Skills
 Your session includes maistro's bundled skills. Use `tdd`, `code-review`,
 `diagnosing-bugs` (for any bug that isn't obvious after a first look), and
-`resolving-merge-conflicts`. Don't use the planning skills (grill, to-spec, to-tickets);
+`resolving-merge-conflicts`. Don't use the planning skills (plan, to-spec, to-tickets);
 planning is Maistro's job, and your brief is already the plan.
 
 ## Never

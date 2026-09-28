@@ -1,28 +1,24 @@
 ---
 name: to-spec
-description: Turn the current conversation into a written spec and publish it to the configured tracker (a GitHub issue or a local markdown file). Use after a grilling session, or when the user asks to write up or spec out what was discussed.
+description: Write the agreed plan as a spec at plans/<plan>/spec.md. Use at the end of a /maistro:plan session, or when the user asks to write up or spec out what was discussed.
 ---
 
 # To spec
 
-Synthesize what has already been discussed. Do not start a new interview: if something
+Synthesize what has already been discussed. Don't start a new interview: if something
 important is genuinely missing, ask at most three targeted questions, then write.
 
 ## Steps
 
-1. Run `maistro-config` to learn the tracker and where specs go.
+1. Run `maistro-config` to confirm where plans live. Use the plan name agreed with the
+   user; if there isn't one yet, propose a short one (lowercase, dashes) and confirm it.
 2. Read `CONTEXT.md` if it exists, and use its terms throughout.
 3. Identify which modules or areas of the codebase the work touches (look, don't guess),
-   and ask the user to confirm them. This keeps the work in the right places.
-4. Write the spec using the template below. Describe behaviour, not implementation;
-   leave file paths and code out unless a prototype produced a snippet that captures a
-   decision (a schema, a state machine, a type) more precisely than prose.
-5. Show the spec to the user and revise until they approve it.
-6. Publish:
-   - **github:** `gh issue create --title "Spec: <title>" --label spec --body-file <file>`
-     (create the `spec` label first with `gh label create spec` if it doesn't exist).
-   - **local:** write `<docs_dir>/specs/<slug>.md`.
-7. Report where it was published and suggest `/maistro:to-tickets` next.
+   and confirm them with the user.
+4. Write `plans/<plan>/spec.md` using the template below. Describe behaviour, not
+   implementation: leave out file paths and code, unless a prototype produced a snippet
+   that captures a decision (a schema, a type, a state machine) more precisely than prose.
+5. Show the spec and revise until the user approves it.
 
 ## Template
 
@@ -30,7 +26,7 @@ important is genuinely missing, ask at most three targeted questions, then write
 # <Title>
 
 ## Problem
-<Who has the problem and why it matters. Two to four sentences.>
+<Who has the problem and why it matters, in two to four sentences.>
 
 ## Outcome
 <What is true when this is done, from the user's point of view.>
@@ -48,7 +44,7 @@ important is genuinely missing, ask at most three targeted questions, then write
 - [ ] <Observable, testable statement>
 
 ## Decisions
-<Key decisions with one-line reasons. Link ADRs if any.>
+<Key decisions with one-line reasons. Link to plans/decisions/ entries if any.>
 
 ## Open questions
 <Anything deferred, or "None".>

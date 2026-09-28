@@ -1,7 +1,7 @@
 # {{TITLE}}
 
 - **Task:** {{ID}}
-- **Issue:** {{ISSUE}}
+- **Ticket:** {{TICKET}}
 - **Base branch:** {{BASE}}
 
 ## Goal

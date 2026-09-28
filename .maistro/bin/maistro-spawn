@@ -19,7 +19,9 @@ done
 valid_id "$id"; require_task "$id"
 [ -n "$model" ]  || die "--model is required (see .maistro/config/dispatch.md)"
 [ -n "$effort" ] || die "--effort is required (low|medium|high|xhigh|max|default)"
-require git; require tmux; require claude "https://code.claude.com"
+require git; require tmux
+load_harness
+harness_check || die "$HARNESS_NAME is not installed or not on PATH"
 
 d="$(task_dir "$id")"
 [ -s "$d/brief.md" ] || die "brief is empty: $d/brief.md"
@@ -68,17 +70,9 @@ rm -f "$MAISTRO_STATE/.cursor/$id.exited"
 ensure_session
 s="$(session_name)"
 prompt="You are the Maistro worker for task '$id'. Your brief is at $d/brief.md. Read it, then begin."
-cmd=(claude --model "$model")
-[ "$effort" = "default" ] || cmd+=(--effort "$effort")
-cmd+=(--permission-mode "$MAISTRO_WORKER_PERMISSION_MODE"
-      --settings "$MAISTRO_HOME/config/worker-settings.json"
-      --append-system-prompt-file "$MAISTRO_HOME/prompts/worker.md"
-      --add-dir "$d"
-      --plugin-dir "$MAISTRO_HOME/plugin"
-      --name "maistro-$id"
-      "$prompt")
+harness_worker_cmd "$id" "$model" "$effort" "$d" "$prompt"
 # Set PATH inside the command: some shells reset a PATH passed through tmux -e.
-shell_cmd="export PATH=$(printf '%q' "$MAISTRO_BIN:$PATH"); $(printf '%q ' "${cmd[@]}"); exec \"\${SHELL:-bash}\""
+shell_cmd="export PATH=$(printf '%q' "$MAISTRO_BIN:$PATH"); $(printf '%q ' "${HARNESS_CMD[@]}"); exec \"\${SHELL:-bash}\""
 
 tmux new-window -d -t "=$s:" -n "$id" -c "$wt" \
   -e "MAISTRO_HOME=$MAISTRO_HOME" \

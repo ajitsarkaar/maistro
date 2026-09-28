@@ -19,11 +19,12 @@ MAISTRO_WORKLOG_DIR="docs/worklogs"
 MAISTRO_SESSION=""
 MAISTRO_MERGE_METHOD="squash"
 MAISTRO_MAISTRO_MODEL=""
-MAISTRO_TRACKER="auto"
-MAISTRO_DOCS_DIR="docs"
+MAISTRO_PLANS_DIR="plans"
+MAISTRO_HARNESS="claude-code"
 # shellcheck source=/dev/null
 [ -f "$MAISTRO_HOME/config/maistro.conf" ] && . "$MAISTRO_HOME/config/maistro.conf"
-export MAISTRO_WORKLOG_DIR MAISTRO_DOCS_DIR
+export MAISTRO_WORKLOG_DIR MAISTRO_PLANS_DIR
+MAISTRO_PLANS="$REPO_ROOT/$MAISTRO_PLANS_DIR"
 
 die()  { printf 'maistro: %s\n' "$*" >&2; exit 1; }
 info() { printf 'maistro: %s\n' "$*" >&2; }
@@ -83,15 +84,10 @@ ensure_session() {
   fi
 }
 
-# Where planning skills publish specs and tickets: github or local.
-tracker() {
-  case "$MAISTRO_TRACKER" in
-    github|local) printf '%s\n' "$MAISTRO_TRACKER"; return ;;
-  esac
-  local url; url="$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null || true)"
-  if [[ "$url" == *github.com* ]] && command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
-    printf 'github\n'
-  else
-    printf 'local\n'
-  fi
+
+load_harness() {
+  local f="$MAISTRO_BIN/harness/$MAISTRO_HARNESS.sh"
+  [ -f "$f" ] || die "unknown harness '$MAISTRO_HARNESS' (no $f)"
+  # shellcheck source=/dev/null
+  . "$f"
 }

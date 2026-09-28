@@ -29,7 +29,9 @@ The `maistro-*` commands are on your PATH (if not, call them as `.maistro/bin/<n
 | Command | Purpose |
 |---|---|
 | `maistro-status [id]` | All tasks at a glance; with an id: meta, status log, live worker screen |
-| `maistro-task new <id> --title T [--issue N]` | Create a task and its brief (prints the brief path) |
+| `maistro-ticket list\|frontier [plan]` | Tickets in `plans/` with status; `frontier` = ready to start |
+| `maistro-ticket show\|set <plan>/<id>` | Read a ticket, or update `status=`, `blocked_by=`, `title=` |
+| `maistro-task new <id> --ticket <plan>/<id>` | Create a task from a ticket (copies ticket and spec into the brief) |
 | `maistro-spawn <id> --model M --effort E` | Worktree + branch `maistro/<id>` + worker in its own tmux window |
 | `maistro-wait [--timeout S]` | Block (no tokens) until a worker needs you; prints events |
 | `maistro-send <id> <message>` | Type a message into a worker's live session |
@@ -37,7 +39,7 @@ The `maistro-*` commands are on your PATH (if not, call them as `.maistro/bin/<n
 | `maistro-merge <id>` | Merge only if open, conflict-free, and all checks green (asks the user) |
 | `maistro-teardown <id>` | Close the worker window and remove its worktree (branch is kept) |
 | `maistro-doctor` | Check dependencies and configuration |
-| `maistro-config` | Resolved settings: base branch, tracker, where specs, tickets, and worklogs go |
+| `maistro-config` | Resolved settings: base branch, harness, where plans and worklogs go |
 
 Configuration lives in `.maistro/config/`: `maistro.conf` (settings), `dispatch.md`
 (model-routing policy), `setup-worktree.sh` (prepares each worktree).
@@ -54,35 +56,40 @@ If `.maistro/state/.initialized` does not exist, do this before anything else:
 
 ## Workflow
 
-### 1. Align
-For anything non-trivial, get aligned before building, using maistro's bundled skills:
-1. **Grill.** Suggest the user runs `/maistro:grill-with-docs` (or `/maistro:grill` for a
-   quick session). These are started by the user, so suggest them; don't skip them.
-2. **Spec.** Use the `to-spec` skill to write up and publish what was agreed.
-3. **Tickets.** Use the `to-tickets` skill to break the spec into thin vertical slices with
-   blocking edges, and publish them.
-`maistro-config` says where specs and tickets go (GitHub issues, or files under the docs
-folder). For small, clear requests, a few questions and a single ticket are enough.
+### 1. Plan
+Planning happens locally, in the `plans/` folder (see `maistro-config`):
+`plans/<plan>/spec.md`, and one file per ticket in `plans/<plan>/tickets/`.
+
+- For anything non-trivial, suggest the user runs **`/maistro:plan`**. It interviews them
+  one question at a time, keeps `CONTEXT.md` (the glossary) and `plans/decisions/` up to
+  date, then writes the spec and tickets (using the `to-spec` and `to-tickets` skills).
+  The user starts it, so suggest it; don't skip it for real features.
+- For a small, clear request, ask a few questions yourself and write one ticket with the
+  `to-tickets` format.
+- Tickets are the source of truth for what's left to do. Before dispatching, ask the user
+  to commit `plans/` and `CONTEXT.md` to the base branch, because workers branch from it.
 
 Other bundled skills you can suggest: `/maistro:handoff` when your own context is getting
 long, `/maistro:implement` for work the user would rather do in one session.
 
 ### 2. Plan a wave
-- The **frontier** is every ticket whose blockers are all done.
+- Run `maistro-ticket frontier` to get every `todo` ticket whose blockers are done.
 - For each frontier ticket, choose a task id (short slug, e.g. `t07-export-csv`), a tier
   from `.maistro/config/dispatch.md` (re-read it every wave), and a predicted **file
   footprint** (the files and modules it will touch).
 - Run tasks in parallel only if their footprints do not overlap and the count stays within
   the parallel cap. Otherwise serialize, and say which task waits for which.
-- Present the plan as a compact table (id, ticket, model/effort, rule applied, footprint)
-  and wait for the user's go.
+- Present the plan as a compact table (task id, ticket, model/effort, rule applied,
+  footprint) and wait for the user's go.
 
 ### 3. Dispatch
 For each task:
-1. `maistro-task new <id> --title "<title>" [--issue N]`.
-2. Fill in the brief it prints. **The brief is your biggest lever:** the worker cannot see
-   this conversation. Make it self-contained: goal, acceptance criteria, scope, out of
-   scope, relevant files and decisions, domain terms, and the exact commands to verify.
+1. `maistro-task new <id> --ticket <plan>/<ticket-id>`. This copies the ticket (and the
+   plan's spec) into the brief and marks the ticket `in-progress`.
+2. Fill in the rest of the brief it prints. **The brief is your biggest lever:** the worker
+   cannot see this conversation. Make it self-contained: goal, acceptance criteria, scope,
+   out of scope, relevant files and decisions, domain terms, and the exact commands to
+   verify.
 3. `maistro-spawn <id> --model <model> --effort <effort>`.
 
 ### 4. Supervise
@@ -115,8 +122,11 @@ For each task:
   `resolving-merge-conflicts` skill, run the tests, and push. Never rebase;
   force-pushing is not allowed. Then retry.
 - If checks are red, send the failure to the worker and wait for a fix.
-- After merging: `maistro-teardown <id> --delete-branch`, mark the ticket done, recompute
-  the frontier, and propose the next wave.
+- After merging: `maistro-teardown <id> --delete-branch`. The ticket is marked `done`
+  automatically (`maistro-pr` already marked it `in-review`). Then run
+  `maistro-ticket frontier` and propose the next wave. Remind the user to commit the
+  updated `plans/` now and then, since ticket status lives there.
+- If a ticket turns out to be unnecessary, `maistro-ticket set <ref> status=dropped`.
 
 ## Context hygiene
 - Keep your own context lean: task ids, one-line summaries, PR links. Never paste worker

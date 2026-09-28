@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # maistro-pr <task-id>
 # Opens (or finds) the pull request for a finished task. The worker's worklog becomes the
-# PR description, and "Closes #N" is added when the task is linked to an issue.
+# PR description. A linked ticket is marked in-review.
 . "$(dirname "$0")/lib.sh"
 
 [ $# -eq 1 ] || die "usage: maistro-pr <task-id>"
@@ -19,10 +19,12 @@ if [ -z "$url" ]; then
   if ! git -C "$REPO_ROOT" show "origin/$branch:$MAISTRO_WORKLOG_DIR/$id.md" > "$body" 2>/dev/null; then
     printf 'Maistro task `%s`. (No worklog found at %s/%s.md.)\n' "$id" "$MAISTRO_WORKLOG_DIR" "$id" > "$body"
   fi
-  issue="$(meta_get "$id" issue)"
-  [ -n "$issue" ] && printf '\n\nCloses #%s\n' "$issue" >> "$body"
+  ticket="$(meta_get "$id" ticket)"
+  [ -n "$ticket" ] && printf '\n\nTicket: `%s`\n' "$ticket" >> "$body"
   url="$(cd "$REPO_ROOT" && gh pr create --head "$branch" --base "$base" --title "$title" --body-file "$body")"
 fi
 meta_set "$id" pr "$url"
 "$MAISTRO_BIN/maistro-report" "$id" pr "$url"
+ticket="$(meta_get "$id" ticket)"
+[ -z "$ticket" ] || "$MAISTRO_BIN/maistro-ticket" set "$ticket" status=in-review pr="$url" >/dev/null
 printf '%s\n' "$url"

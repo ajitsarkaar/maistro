@@ -6,7 +6,7 @@
 if [ $# -ge 1 ]; then
   id="$1"; valid_id "$id"; require_task "$id"; d="$(task_dir "$id")"
   printf '== %s ==\n' "$id"
-  for k in title issue base branch model effort pr worktree; do
+  for k in title ticket base branch model effort pr worktree; do
     v="$(meta_get "$id" "$k")"; [ -n "$v" ] && printf '%-9s %s\n' "$k:" "$v"
   done
   printf 'window:   %s\n' "$(window_alive "$id" && echo live || echo closed)"

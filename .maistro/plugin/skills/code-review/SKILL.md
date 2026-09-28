@@ -12,7 +12,7 @@ right code?* Answer them separately.
 
 - **The diff:** for a branch, `git diff origin/<base>...HEAD` (use the base branch from
   `maistro-config`); for a PR, `gh pr diff <url>`.
-- **The intent:** the brief, ticket, spec, or issue the change is meant to satisfy. If you
+- **The intent:** the worker brief, ticket, or spec the change is meant to satisfy. If you
   can't find one, ask. A Spec review without a spec is guesswork.
 
 ## 2. Review each axis separately

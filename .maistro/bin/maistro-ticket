@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+# maistro-ticket: work with the local plan folder (default: plans/).
+#
+#   maistro-ticket list [plan]                every ticket with its status
+#   maistro-ticket frontier [plan]            tickets ready to start (todo, all blockers done)
+#   maistro-ticket show <plan>/<id>           print a ticket
+#   maistro-ticket path <plan>/<id>           print a ticket's file path
+#   maistro-ticket set <plan>/<id> key=value  update status, task, pr, blocked_by, or title
+#
+# Layout:  plans/<plan>/spec.md
+#          plans/<plan>/tickets/<id>-<slug>.md   (id is a number: 01, 02, ...)
+# Each ticket starts with a header between '---' lines:
+#   id, title, status (todo|in-progress|in-review|done|dropped), blocked_by, task, pr
+. "$(dirname "$0")/lib.sh"
+
+STATUSES="todo in-progress in-review done dropped"
+
+fm_get() {  # <file> <key>: value of a header field
+  awk -v k="$2" '
+    NR==1 { if ($0 != "---") exit; next }
+    $0 == "---" { exit }
+    { i = index($0, ":"); if (i && substr($0, 1, i-1) == k) {
+        v = substr($0, i+1); sub(/^[ \t]+/, "", v); sub(/[ \t]+$/, "", v); print v; exit } }' "$1"
+}
+
+fm_set() {  # <file> <key> <value>: replace or add a header field
+  local tmp; tmp="$(mktemp)"
+  awk -v k="$2" -v v="$3" '
+    NR==1 { print; infm = ($0 == "---"); next }
+    infm && $0 == "---" { if (!found) print k ": " v; infm = 0; print; next }
+    infm { i = index($0, ":"); if (i && substr($0, 1, i-1) == k) { print k ": " v; found = 1; next } }
+    { print }' "$1" > "$tmp" && mv "$tmp" "$1"
+}
+
+plans() {
+  [ -d "$MAISTRO_PLANS" ] || return 0
+  for p in "$MAISTRO_PLANS"/*/; do [ -d "$p/tickets" ] && basename "$p"; done
+}
+
+tickets_of() {  # <plan>: ticket files, in id order
+  local dir="$MAISTRO_PLANS/$1/tickets"
+  [ -d "$dir" ] || return 0
+  find "$dir" -maxdepth 1 -name '[0-9]*.md' | sort
+}
+
+num() { local n="${1##0}"; printf '%s' "${n:-0}"; }  # "03" -> 3
+
+ticket_file() {  # <plan>/<id> or a path -> file path
+  local ref="$1"
+  if [ -f "$ref" ]; then printf '%s\n' "$ref"; return; fi
+  [[ "$ref" =~ ^([a-z0-9][a-z0-9-]*)/([0-9]+)$ ]] || die "bad ticket reference '$ref' (use <plan>/<id>, e.g. csv-export/03)"
+  local plan="${BASH_REMATCH[1]}" want; want="$(num "${BASH_REMATCH[2]}")"
+  local f
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    if [ "$(num "$(fm_get "$f" id)")" = "$want" ]; then printf '%s\n' "$f"; return; fi
+  done < <(tickets_of "$plan")
+  die "no ticket $ref (see: maistro-ticket list $plan)"
+}
+
+ref_of() {  # <file> -> <plan>/<id>
+  local plan; plan="$(basename "$(dirname "$(dirname "$1")")")"
+  printf '%s/%s\n' "$plan" "$(fm_get "$1" id)"
+}
+
+blockers_done() {  # <plan> <blocked_by value>: true if every blocker is done or dropped
+  local plan="$1" list="$2" b f s found
+  case "$list" in ""|none|None|-) return 0 ;; esac
+  for b in ${list//,/ }; do
+    b="$(num "$b")"; found=0
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      if [ "$(num "$(fm_get "$f" id)")" = "$b" ]; then
+        found=1; s="$(fm_get "$f" status)"
+        [ "$s" = "done" ] || [ "$s" = "dropped" ] || return 1
+      fi
+    done < <(tickets_of "$plan")
+    [ "$found" = 1 ] || return 1
+  done
+  return 0
+}
+
+print_rows() {  # <mode: all|frontier> [plan]
+  local mode="$1" only="${2:-}" p f n=0
+  printf '%-26s %-12s %-11s %-22s %s\n' TICKET STATUS BLOCKED-BY TASK TITLE
+  for p in $(plans); do
+    [ -z "$only" ] || [ "$only" = "$p" ] || continue
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      local st bb; st="$(fm_get "$f" status)"; bb="$(fm_get "$f" blocked_by)"
+      if [ "$mode" = frontier ]; then
+        [ "$st" = todo ] || continue
+        blockers_done "$p" "$bb" || continue
+      fi
+      printf '%-26s %-12s %-11s %-22s %s\n' "$(ref_of "$f")" "${st:-?}" "${bb:-none}" "$(fm_get "$f" task)" "$(fm_get "$f" title)"
+      n=$((n + 1))
+    done < <(tickets_of "$p")
+  done
+  if [ "$n" = 0 ]; then
+    if [ "$mode" = frontier ]; then echo "(no tickets are ready to start)"; else echo "(no tickets yet in $MAISTRO_PLANS_DIR/)"; fi
+  fi
+}
+
+cmd="${1:-list}"; shift || true
+case "$cmd" in
+  list)     print_rows all "${1:-}" ;;
+  frontier) print_rows frontier "${1:-}" ;;
+  show)     [ $# -eq 1 ] || die "usage: maistro-ticket show <plan>/<id>"; f="$(ticket_file "$1")"; cat "$f" ;;
+  path)     [ $# -eq 1 ] || die "usage: maistro-ticket path <plan>/<id>"; ticket_file "$1" ;;
+  set)
+    [ $# -ge 2 ] || die "usage: maistro-ticket set <plan>/<id> key=value [key=value...]"
+    f="$(ticket_file "$1")"; shift
+    for kv in "$@"; do
+      k="${kv%%=*}"; v="${kv#*=}"
+      [ "$k" != "$kv" ] || die "expected key=value, got '$kv'"
+      case "$k" in
+        status) [[ " $STATUSES " == *" $v "* ]] || die "status must be one of: $STATUSES" ;;
+        task|pr|blocked_by|title) ;;
+        *) die "unknown field '$k' (status, task, pr, blocked_by, title)" ;;
+      esac
+      fm_set "$f" "$k" "$v"
+    done
+    printf '%s: %s\n' "$(ref_of "$f")" "$*" ;;
+  *) die "unknown command '$cmd' (list, frontier, show, path, set)" ;;
+esac

@@ -10,7 +10,9 @@ bad()  { printf '  FAIL  %s\n' "$*"; fail=1; }
 echo "maistro doctor: $REPO_ROOT"
 echo "required:"
 git -C "$REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1 && ok "git repository" || bad "not a git repository"
-for c in git tmux claude; do
+load_harness
+if harness_check; then ok "harness: $HARNESS_NAME"; else bad "harness: $HARNESS_NAME is not installed"; fi
+for c in git tmux; do
   if command -v "$c" >/dev/null 2>&1; then ok "$c: $("$c" --version 2>/dev/null | head -n1 || "$c" -V 2>/dev/null)"
   else bad "$c not found"; fi
 done
@@ -39,7 +41,7 @@ n_skills="$(find "$MAISTRO_HOME/plugin/skills" -name SKILL.md 2>/dev/null | wc -
 if [ -f "$MAISTRO_HOME/plugin/.claude-plugin/plugin.json" ] && [ "$n_skills" -gt 0 ]; then
   ok "bundled skills: $n_skills (use as /maistro:<skill>)"
 else bad "bundled skills plugin missing at .maistro/plugin"; fi
-ok "planning tracker: $(tracker)"
+ok "plans folder: $MAISTRO_PLANS_DIR/ (specs and tickets)"
 
 [ "$fail" = 0 ] && echo "ready." || echo "fix the FAIL items above, then run maistro again."
 exit "$fail"

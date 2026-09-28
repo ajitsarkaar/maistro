@@ -34,5 +34,7 @@ bad="$(jq -r '[.statusCheckRollup[]? |
 sha="$(jq -r .headRefOid <<<"$json")"
 (cd "$REPO_ROOT" && gh pr merge "$url" "--$MAISTRO_MERGE_METHOD" --match-head-commit "$sha")
 "$MAISTRO_BIN/maistro-report" "$id" merged "$url @ ${sha:0:8}"
+ticket="$(meta_get "$id" ticket)"
+[ -z "$ticket" ] || "$MAISTRO_BIN/maistro-ticket" set "$ticket" status=done >/dev/null
 has_origin && git -C "$REPO_ROOT" fetch --quiet origin 2>/dev/null || true
 echo "merged $url"

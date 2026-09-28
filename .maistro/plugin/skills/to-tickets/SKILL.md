@@ -1,46 +1,41 @@
 ---
 name: to-tickets
-description: Break a spec, plan, or conversation into small tickets that are thin end-to-end slices, each declaring which tickets block it, and publish them to the configured tracker. Use when the user wants work broken down into tickets or tasks for parallel workers.
+description: Break a plan's spec into small tickets - thin end-to-end slices, each declaring which tickets block it - written as files in plans/<plan>/tickets/. Use at the end of a /maistro:plan session, or when the user wants work broken into tickets for parallel workers.
 ---
 
 # To tickets
 
-Good tickets make parallel work possible. Each ticket should be something a single worker
-can finish in one fresh session, and the dependencies between tickets tell Maistro what
-can run at the same time.
+Good tickets make parallel work possible. Each ticket should be something one worker can
+finish in one fresh session, and the blockers between tickets tell Maistro what can run
+at the same time.
 
 ## Steps
 
-1. Run `maistro-config` to learn the tracker and where tickets go.
-2. Gather the source: the conversation, or the spec the user points to (read the whole
-   issue or file, including comments).
-3. Look at the code in the affected areas, and use the terms in `CONTEXT.md`. Respect
-   existing ADRs.
-4. Look for **preparatory refactoring** that would make the feature simple to add, and
-   make it the first ticket if it's worth doing.
-5. Draft the tickets (rules below), then present them to the user as a numbered list:
-   title, what it delivers, and what blocks it.
-6. Ask: Is the granularity right? Are the blockers right (each one should truly be needed
-   first)? Should anything be merged or split? Iterate until approved.
-7. Publish, in dependency order so blockers exist before the tickets that reference them:
-   - **github:** one issue per ticket with `gh issue create`, labelled `maistro-ready`
-     (create the label if missing). Put `Blocked by: #12, #14` (or `None`) in each body,
-     and reference the parent spec issue if there is one.
-   - **local:** one file `<docs_dir>/tickets/<slug>.md` containing every ticket in
-     dependency order.
-8. Summarize the **frontier**: the tickets with no blockers, which can start right away.
+1. Read `plans/<plan>/spec.md` in full, and `CONTEXT.md` if it exists. Respect the
+   decisions in `plans/decisions/`.
+2. Look at the code in the affected areas.
+3. Look for **preparatory refactoring** that would make the feature simple to add. If it's
+   worth doing, make it the first ticket.
+4. Draft the tickets (rules below) and present them as a numbered list: title, what it
+   delivers, and what blocks it.
+5. Ask: Is the granularity right? Are the blockers right (each one truly needed first)?
+   Should anything be merged or split? Iterate until the user approves.
+6. Write one file per ticket: `plans/<plan>/tickets/<id>-<slug>.md`, with ids `01`, `02`,
+   and so on, numbered so every blocker has a lower id than the tickets it blocks.
+7. Run `maistro-ticket list <plan>` to check the files parse, then
+   `maistro-ticket frontier <plan>` to show which tickets can start right away.
 
 ## Rules for slicing
 
 - **Vertical, not horizontal.** Each ticket delivers a narrow but complete path through
-  every layer it needs (data, logic, interface, tests) so it can be demonstrated or
+  every layer it needs (data, logic, interface, tests), so it can be demonstrated or
   verified on its own. "Add the database table" is a horizontal slice; avoid it.
 - **One fresh session.** Size each ticket so a worker can finish it without running out
-  of context. If you're unsure, split it.
+  of context. If unsure, split it.
 - **Honest blockers.** A ticket is blocked only by tickets whose results it genuinely
   needs. Fewer blockers means more parallelism.
-- **Mind the overlap.** Two tickets that will edit the same files can't run in parallel
-  safely. Note likely overlaps so Maistro can serialize them.
+- **Mind the overlap.** Two tickets that will edit the same files can't safely run in
+  parallel. Note likely overlaps under "Notes" so Maistro can serialize them.
 
 ### Wide mechanical changes: expand, migrate, contract
 
@@ -51,18 +46,31 @@ and can't be sliced vertically. Sequence them instead:
    batch, each blocked only by the expand ticket. These batches can run in parallel.
 3. **Contract:** remove the old form, blocked by every migrate ticket.
 
-## Ticket template
+## Ticket file format
+
+The header between the `---` lines is read by `maistro-ticket`, so keep its fields
+exactly as shown. `blocked_by` lists ticket ids from the same plan, or `none`.
 
 ```markdown
-## <Title>
+---
+id: 03
+title: Export trades as CSV
+status: todo
+blocked_by: 01, 02
+task:
+pr:
+---
 
-**What it delivers:** <end-to-end behaviour, from the user's point of view>
+## What it delivers
+<The end-to-end behaviour, from the user's point of view.>
 
-**Acceptance criteria**
+## Acceptance criteria
 - [ ] <criterion>
 
-**Blocked by:** <tickets, or "None">
+## Notes
+<Likely file overlaps with other tickets, hints, gotchas. Optional.>
 ```
 
-Leave out file paths and code; they go stale. The exception is a decision-carrying
-snippet from a prototype (schema, type, state machine), marked as such.
+Leave out file paths and code in the body; they go stale. The exception is a
+decision-carrying snippet from a prototype (a schema, a type, a state machine), marked as
+such. Maistro fills in `status`, `task`, and `pr` as the work progresses.

@@ -12,7 +12,8 @@ cmd="${1:-start}"
 case "$cmd" in
   start)
     require tmux "brew install tmux / apt install tmux"
-    require claude "https://code.claude.com"
+    load_harness
+    harness_check || die "$HARNESS_NAME is not installed or not on PATH"
     require git
     s="$(session_name)"
     if tmux has-session -t "=$s" 2>/dev/null && tmux list-windows -t "=$s" -F '#{window_name}' | grep -qx maistro; then
@@ -20,13 +21,10 @@ case "$cmd" in
       do_attach; exit 0
     fi
     mkdir -p "$MAISTRO_TASKS"
-    args=(claude --name maistro
-          --plugin-dir "$MAISTRO_HOME/plugin"
-          --settings "$MAISTRO_HOME/config/maistro-settings.json"
-          --append-system-prompt-file "$MAISTRO_HOME/prompts/maistro.md")
-    [ -n "$MAISTRO_MAISTRO_MODEL" ] && args+=(--model "$MAISTRO_MAISTRO_MODEL")
-    [ -f "$MAISTRO_STATE/.initialized" ] || args+=("Hello Maistro. This is a first run: please do the first-run setup.")
-    shell_cmd="export PATH=$(printf '%q' "$MAISTRO_BIN:$PATH"); $(printf '%q ' "${args[@]}"); exec \"\${SHELL:-bash}\""
+    first=""
+    [ -f "$MAISTRO_STATE/.initialized" ] || first="Hello Maistro. This is a first run: please do the first-run setup."
+    harness_maistro_cmd "$first"
+    shell_cmd="export PATH=$(printf '%q' "$MAISTRO_BIN:$PATH"); $(printf '%q ' "${HARNESS_CMD[@]}"); exec \"\${SHELL:-bash}\""
     envs=(-e "MAISTRO_HOME=$MAISTRO_HOME")
     if tmux has-session -t "=$s" 2>/dev/null; then
       tmux new-window -t "=$s:" -n maistro -c "$REPO_ROOT" "${envs[@]}" "$shell_cmd"

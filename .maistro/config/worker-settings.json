@@ -30,7 +30,8 @@
       "Bash(git switch *)",
       "Bash(git worktree *)",
       "Bash(git branch -D *)",
-      "Bash(gh pr merge *)"
+      "Bash(gh pr merge *)",
+      "Bash(maistro-ticket set *)"
     ]
   }
 }

@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
 # maistro-config: prints the resolved settings that skills and agents need, one per line.
 . "$(dirname "$0")/lib.sh"
-t="$(tracker)"
 cat <<OUT
 repo_root=$REPO_ROOT
 base_branch=$(base_branch)
-tracker=$t
-docs_dir=$MAISTRO_DOCS_DIR
-specs=$( [ "$t" = github ] && echo "GitHub issues labelled 'spec'" || echo "$MAISTRO_DOCS_DIR/specs/<slug>.md" )
-tickets=$( [ "$t" = github ] && echo "GitHub issues labelled 'maistro-ready', blockers listed in each body" || echo "$MAISTRO_DOCS_DIR/tickets/<slug>.md" )
+harness=$MAISTRO_HARNESS
+plans=$MAISTRO_PLANS_DIR/<plan>/            (one folder per plan)
+spec=$MAISTRO_PLANS_DIR/<plan>/spec.md
+tickets=$MAISTRO_PLANS_DIR/<plan>/tickets/<id>-<slug>.md   (manage with maistro-ticket)
+decisions=$MAISTRO_PLANS_DIR/decisions/NNNN-<slug>.md
 glossary=CONTEXT.md
-adrs=$MAISTRO_DOCS_DIR/adr/NNNN-<slug>.md
 worklogs=$MAISTRO_WORKLOG_DIR/<task-id>.md
 OUT

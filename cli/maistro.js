@@ -3,7 +3,7 @@
 //
 //   maistro init [path]      install .maistro/ into the repo containing [path] (default: here)
 //   maistro upgrade [path]   refresh scripts, prompts, templates and skills; keep your config
-//   maistro [command]        run the repo's own maistro (start, attach, status, doctor, stop)
+//   maistro [command]        run the repo's own maistro (start, attach, status, doctor, stop, uninstall)
 //
 // No dependencies: Node's standard library only.
 'use strict';
@@ -20,7 +20,7 @@ const VERSION = require(path.join(PKG_ROOT, 'package.json')).version;
 const TOOL_PARTS = ['bin', 'prompts', 'templates', 'plugin'];
 // npm strips .gitignore files from published packages, so the CLI writes this one itself.
 const GITIGNORE = '# Runtime state and worker checkouts are local to each machine.\nstate/\nworktrees/\n';
-const REPO_COMMANDS = new Set(['start', 'attach', 'status', 'doctor', 'stop']);
+const REPO_COMMANDS = new Set(['start', 'attach', 'status', 'doctor', 'stop', 'uninstall']);
 
 const out = (msg = '') => process.stdout.write(msg + '\n');
 function fail(msg) {
@@ -153,6 +153,7 @@ Usage:
   maistro status           show all tasks
   maistro doctor           check dependencies and configuration
   maistro attach | stop    re-attach to, or close, the tmux session
+  maistro uninstall        remove maistro from this repo (keeps plans and branches)
   maistro --version
 
 Docs: https://github.com/ajitsarkaar/maistro`);

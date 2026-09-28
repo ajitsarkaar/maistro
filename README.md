@@ -63,19 +63,8 @@ git add .maistro && git commit -m "Add maistro"
 npx @ajitsarkaar/maistro             # starts Maistro in tmux
 ```
 
-Prefer a shorter command? Install it globally once, then use `maistro` everywhere:
-
-```bash
-npm install -g @ajitsarkaar/maistro
-maistro init
-maistro
-```
-
-No Node? The shell installer does the same thing:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/ajitsarkaar/maistro/main/install.sh | bash
-```
+Other ways to install (a global `maistro` command, straight from GitHub, or a shell
+installer without Node), and complete uninstall steps, are in **[INSTALL.md](INSTALL.md)**.
 
 **Commit `.maistro/`.** Workers run in worktrees made from your committed history, and
 committing the folder shares your configuration with your team. Runtime state
@@ -194,6 +183,7 @@ Maistro uses these itself; they're also handy for you.
 | `maistro status [id]` | Task overview, or details plus the worker's live screen |
 | `maistro doctor` | Check dependencies and configuration |
 | `maistro stop` | Close the session (worktrees and branches are kept) |
+| `maistro uninstall` | Remove maistro from the repo (plans and branches are kept) |
 | `maistro-task new <id> --ticket <plan>/<id>` | Create a task from a ticket (the ticket and spec go into the brief) |
 | `maistro-spawn <id> --model M --effort E` | Start a worker |
 | `maistro-wait` | Block until a worker needs attention |
@@ -217,15 +207,14 @@ Maistro uses these itself; they're also handy for you.
 - Teardown never loses commits (they stay on the branch) and refuses to discard
   uncommitted work without `--force`.
 
-## Upgrading
+## Upgrading and uninstalling
 
 ```bash
-npx @ajitsarkaar/maistro@latest upgrade      # or: maistro upgrade (after npm update -g @ajitsarkaar/maistro)
+npx @ajitsarkaar/maistro@latest upgrade   # update maistro; your config is kept
+maistro uninstall                         # remove it; your plans and branches are kept
 ```
 
-This replaces maistro's scripts, prompts, templates, and skills. Your `config/` is kept;
-if a default changed, the new version is saved beside yours as `*.new` for you to compare.
-Your plans and any running tasks are never touched.
+See [INSTALL.md](INSTALL.md#5-uninstall) for the details.
 
 ## Roadmap
 

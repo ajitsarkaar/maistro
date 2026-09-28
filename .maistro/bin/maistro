@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# maistro [start|attach|stop|status|doctor|help]
+# maistro [start|attach|stop|status|doctor|uninstall|help]
 # Starts (or re-attaches to) the tmux session where you talk to Maistro.
 . "$(dirname "$0")/lib.sh"
 
@@ -42,6 +42,7 @@ case "$cmd" in
     tmux kill-session -t "=$s" ;;
   status) exec "$MAISTRO_BIN/maistro-status" "${@:2}" ;;
   doctor) exec "$MAISTRO_BIN/maistro-doctor" ;;
+  uninstall) exec "$MAISTRO_BIN/maistro-uninstall" "${@:2}" ;;
   help|-h|--help)
     cat <<USAGE
 maistro            start Maistro in tmux (or attach if running)
@@ -49,6 +50,7 @@ maistro attach     attach to the running session
 maistro status     show all tasks
 maistro doctor     check dependencies and configuration
 maistro stop       close the session (worktrees and branches are kept)
+maistro uninstall  remove maistro from this repo (plans and branches are kept)
 
 Inside tmux: Ctrl-b w lists windows (Maistro + one per worker), Ctrl-b d detaches.
 USAGE

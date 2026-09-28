@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# maistro-uninstall [--yes] [--force] [--delete-branches]
+# Removes maistro from this repository:
+#   1. closes the tmux session (Maistro and every worker window)
+#   2. removes every worker worktree under .maistro/worktrees
+#   3. with --delete-branches, deletes the local maistro/* branches
+#   4. deletes .maistro/
+# Your plans/, CONTEXT.md and worklogs are yours and are never touched.
+# Refuses if a worktree has uncommitted work, unless --force (which discards it).
+. "$(dirname "$0")/lib.sh"
+
+main() {
+  local yes=0 force=0 delbranches=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --yes|-y) yes=1 ;;
+      --force) force=1 ;;
+      --delete-branches) delbranches=1 ;;
+      *) die "usage: maistro uninstall [--yes] [--force] [--delete-branches]" ;;
+    esac
+    shift
+  done
+
+  local s; s="$(session_name)"
+  local wts=() wt
+  if [ -d "$MAISTRO_WORKTREES" ]; then
+    for wt in "$MAISTRO_WORKTREES"/*/; do [ -d "$wt" ] && wts+=("${wt%/}"); done
+  fi
+  local branches
+  branches="$(git -C "$REPO_ROOT" for-each-ref --format='%(refname:short)' 'refs/heads/maistro/*' 2>/dev/null || true)"
+
+  # Never silently discard uncommitted work.
+  local dirty=""
+  for wt in "${wts[@]}"; do
+    if [ -n "$(git -C "$wt" status --porcelain 2>/dev/null)" ]; then dirty+="  $(basename "$wt")"$'\n'; fi
+  done
+  if [ -n "$dirty" ] && [ "$force" != 1 ]; then
+    die "these worker worktrees have uncommitted changes:
+$dirty
+Ask the workers to commit, or re-run with --force to discard those changes."
+  fi
+
+  echo "This will remove maistro from $REPO_ROOT:"
+  if tmux has-session -t "=$s" 2>/dev/null; then echo "  - close tmux session '$s' (Maistro and all workers)"; fi
+  [ ${#wts[@]} -eq 0 ] || echo "  - remove ${#wts[@]} worker worktree(s) in .maistro/worktrees/"
+  if [ -n "$branches" ]; then
+    if [ "$delbranches" = 1 ]; then echo "  - delete local branches: $(echo "$branches" | tr '\n' ' ')"
+    else echo "  - keep local branches: $(echo "$branches" | tr '\n' ' ')(add --delete-branches to remove)"; fi
+  fi
+  echo "  - delete .maistro/ (scripts, config, skills, and task state)"
+  echo "Kept: $MAISTRO_PLANS_DIR/, CONTEXT.md, $MAISTRO_WORKLOG_DIR/, and all commits on your branches."
+  if [ "$yes" != 1 ]; then
+    printf 'Continue? [y/N] '
+    local a; read -r a
+    [ "$a" = y ] || [ "$a" = Y ] || { echo "Cancelled."; exit 0; }
+  fi
+
+  if tmux has-session -t "=$s" 2>/dev/null; then
+    # When run from inside the session itself, killing it would stop this script midway.
+    if [ -n "${TMUX:-}" ] && [ "$(tmux display-message -p '#S' 2>/dev/null)" = "$s" ]; then
+      die "you're inside the maistro tmux session; detach first (Ctrl-b d), then run uninstall again"
+    fi
+    tmux kill-session -t "=$s"
+  fi
+  for wt in "${wts[@]}"; do
+    git -C "$REPO_ROOT" worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt"
+  done
+  git -C "$REPO_ROOT" worktree prune
+  if [ "$delbranches" = 1 ] && [ -n "$branches" ]; then
+    local b; while IFS= read -r b; do [ -n "$b" ] && git -C "$REPO_ROOT" branch -D "$b" >/dev/null; done <<< "$branches"
+  fi
+  rm -rf "$MAISTRO_HOME"
+
+  echo
+  echo "maistro was removed. To finish:"
+  echo "  git add -A .maistro && git commit -m \"Remove maistro\""
+  if [ -n "$branches" ] && [ "$delbranches" != 1 ]; then
+    echo "  git branch -D <branch>                     (for any maistro/* branches you no longer need)"
+  fi
+  if has_origin; then
+    echo "  git push origin --delete maistro/<id>     (for any maistro/* branches you pushed)"
+  fi
+}
+
+# Everything runs inside main(), which bash reads in full before running,
+# so deleting this script's own folder at the end is safe.
+main "$@"
+exit 0

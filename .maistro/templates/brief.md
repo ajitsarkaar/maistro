@@ -18,7 +18,7 @@
 <!-- What to leave alone, even if tempting. -->
 
 ## Context and hints
-<!-- Relevant files, prior decisions, domain terms (see CONTEXT.md), known gotchas. -->
+<!-- Relevant files, prior decisions, domain terms (see .maistro/plans/CONTEXT.md), known gotchas. -->
 
 ## Verification
 <!-- Exact commands: typecheck, lint, focused tests, full suite. -->

@@ -37,7 +37,7 @@ Keep a running decision log in the conversation, one line each:
 ## 2. Build the shared vocabulary as you go
 
 Agents and humans waste words and make mistakes when they use different names for the same
-thing. Maintain `CONTEXT.md` at the repo root as the project's glossary:
+thing. Maintain `.maistro/plans/CONTEXT.md` as the project's glossary:
 
 - Read it first if it exists, and use its terms in your questions.
 - When the user describes a concept with a phrase ("an order that only partly executed"),
@@ -58,8 +58,8 @@ thing. Maintain `CONTEXT.md` at the repo root as the project's glossary:
 ## 3. Record the decisions that matter
 
 When a decision is hard to reverse, surprising to a newcomer, or the result of a real
-trade-off, record it in `plans/decisions/NNNN-<slug>.md` (numbered sequentially). Skip
-trivia.
+trade-off, record it in `.maistro/plans/decisions/NNNN-<slug>.md` (numbered
+sequentially). Skip trivia.
 
 ```markdown
 # NNNN. <Decision in a few words>
@@ -87,7 +87,7 @@ Stop interviewing when every branch is resolved or explicitly deferred by the us
 3. Write the spec with the `to-spec` skill.
 4. Break it into tickets with the `to-tickets` skill.
 5. Tell the user what was written, show `maistro-ticket list <plan>`, and suggest they
-   commit `plans/` and `CONTEXT.md` to the base branch before Maistro dispatches workers:
+   commit `.maistro/plans/` to the base branch before Maistro dispatches workers:
    workers branch from there.
 
 For a small, clear change, keep the interview short: a few questions, a brief spec, and

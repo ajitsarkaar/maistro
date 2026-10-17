@@ -26,7 +26,7 @@ Every worker leaves a short worklog on its branch, which becomes the PR descript
         │ t01 ││ t02 ││ t03 │   opus/high · sonnet/medium · haiku
         └──┬──┘└──┬──┘└──┬──┘
            ▼      ▼      ▼
-   .maistro/worktrees/<id>  on branch maistro/<id>  →  push  →  PR  →  your "merge it"
+   .maistro/worktrees/<id>  on branch maistro/<id>  →  PR (GitHub or local)  →  your "merge it"
 ```
 
 ## Why maistro
@@ -38,19 +38,21 @@ Every worker leaves a short worklog on its branch, which becomes the PR descript
   `.maistro/config/dispatch.md`, so you can tune the cost/quality trade-off.
 - **Safe by construction.** Maistro can't edit your code, push, or switch branches. Merges
   require a green, conflict-free PR *and* your approval at a Claude Code permission prompt.
-- **One folder.** The tool lives in `.maistro/`. Your plans live in a visible `plans/`
-  folder next to your code, as plain markdown you can read, edit, and review.
+- **One folder.** Everything maistro writes lives in `.maistro/`: the tool, your plans
+  (`.maistro/plans/`), and the workers' worklogs (`.maistro/worklogs/`). It never touches
+  the rest of your repository; only the workers' code changes do, through PRs you approve.
 - **Batteries included.** A bundled skill set covers the whole workflow, from planning an
   idea into a spec and tickets to test-driven implementation and two-axis code review.
-- **Plain bash.** About 830 lines of readable shell. No daemon, no database, no build step.
+- **Plain bash.** About 1,100 lines of readable shell. No daemon, no database, no build step.
 
 ## Requirements
 
 - [Claude Code](https://code.claude.com), logged in. maistro runs on Claude Code today;
   other coding agents are on the roadmap.
-- `git`, `tmux`, and `bash` 4+ (macOS or Linux; on Windows, use WSL)
+- `git` 2.38+, `tmux`, and `bash` (macOS or Linux; on Windows, use WSL)
 - Node.js 18+ for the `npx` installer (optional: there's a shell installer too)
-- For pull requests: the [GitHub CLI](https://cli.github.com) (`gh auth login`) and `jq`
+- Optional: the [GitHub CLI](https://cli.github.com) (`gh auth login`) for GitHub pull requests.
+  You don't need a remote to start: without one, maistro reviews and merges locally.
 
 ## Install
 
@@ -77,7 +79,7 @@ branch, and helps you fill in `setup-worktree.sh` so fresh worktrees can run you
 
 1. **Plan.** Run `/maistro:plan` and describe what you want. Maistro interviews you one
    question at a time until nothing is left to guess, then writes a spec and a set of
-   tickets with dependencies into `plans/`.
+   tickets with dependencies into `.maistro/plans/`.
 2. **Plan a wave.** Maistro takes every ticket that isn't blocked, picks a model and effort
    for each, and checks that parallel tasks won't touch the same files. It shows you the
    plan and waits for your go.
@@ -88,22 +90,44 @@ branch, and helps you fill in `setup-worktree.sh` so fresh worktrees can run you
    diff against the brief, and sends feedback to the worker if needed.
 6. **Merge.** You approve; Maistro merges and cleans up, then plans the next wave.
 
+## With or without GitHub
+
+A GitHub remote is optional. `maistro-config` shows which mode you're in:
+
+- **Local** (no remote, or no `gh`): Maistro reviews each worker's branch with
+  `git diff`, and `maistro-merge` merges it into your base branch with plain git. The
+  merge is pinned to the commit Maistro reviewed, and the base branch only moves forward,
+  so local edits in your checkout are never overwritten.
+- **GitHub** (an `origin` on GitHub and a logged-in `gh`): real pull requests, CI checks,
+  and merges on GitHub.
+
+Either way, maistro checks for conflicts as soon as a PR is opened and again before merging.
+When it finds them, it lists the files and offers two fixes: the worker merges the base
+branch in and resolves them, or you do it yourself in the worker's tmux window.
+
+To move to GitHub later, add the remote and log in (`git remote add origin <url>`,
+`gh auth login`), then push your base branch. Nothing needs migrating: new PRs go to
+GitHub, and tasks already reviewed locally still merge locally.
+
 ## Planning, locally
 
-Plans are plain files in your repo, so they're versioned, reviewable, and readable by
-humans and agents alike:
+Plans are plain markdown files inside `.maistro/`, so they're versioned, reviewable, and
+readable by humans and agents alike:
 
 ```
-plans/
-├── csv-export/
-│   ├── spec.md                       what we're building and why
-│   └── tickets/
-│       ├── 01-export-endpoint.md
-│       ├── 02-export-button.md
-│       └── 03-large-file-streaming.md
-└── decisions/
-    └── 0001-stream-large-exports.md  decisions worth remembering
-CONTEXT.md                            the project's shared vocabulary
+.maistro/
+├── plans/
+│   ├── CONTEXT.md                        the project's shared vocabulary
+│   ├── csv-export/
+│   │   ├── spec.md                       what we're building and why
+│   │   └── tickets/
+│   │       ├── 01-export-endpoint.md
+│   │       ├── 02-export-button.md
+│   │       └── 03-large-file-streaming.md
+│   └── decisions/
+│       └── 0001-stream-large-exports.md  decisions worth remembering
+└── worklogs/
+    └── t01.md                            each worker's worklog, merged with its PR
 ```
 
 Each ticket starts with a small header that maistro keeps up to date:
@@ -121,7 +145,7 @@ pr:
 
 `maistro-ticket list` shows every ticket; `maistro-ticket frontier` shows the ones ready to
 start. When Maistro dispatches a ticket it becomes `in-progress`, its PR moves it to
-`in-review`, and merging marks it `done`. Commit `plans/` like any other code.
+`in-review`, and merging marks it `done`. Commit `.maistro/plans/` like any other code.
 
 ## Bundled skills
 
@@ -132,7 +156,7 @@ nothing added to your global Claude Code setup.
 | Skill | Started by | What it does |
 |---|---|---|
 | `/maistro:plan` | you | Interviews you one question at a time, builds the glossary and decision records, then writes the spec and tickets |
-| `to-spec` | Maistro | Writes the agreed plan as `plans/<plan>/spec.md` |
+| `to-spec` | Maistro | Writes the agreed plan as `.maistro/plans/<plan>/spec.md` |
 | `to-tickets` | Maistro | Splits a spec into thin vertical-slice tickets with blockers, one file each, ready for parallel workers |
 | `/maistro:implement` | you | Builds a spec or ticket in the current session, without dispatching workers |
 | `/maistro:handoff` | you | Compresses a long session into a handoff document for a fresh one |
@@ -149,11 +173,21 @@ Maistro and each worker get their own window in one tmux session (`maistro-<repo
 
 | Keys | Action |
 |---|---|
+| Mouse wheel | scroll back through output, like a normal terminal; scroll to the bottom (or press `q`) to return |
+| Click a window name | switch to that window |
 | `Ctrl-b w` | pick a window: Maistro or any worker |
 | `Ctrl-b d` | detach; everything keeps running |
 | `maistro attach` | come back later |
 
-You can type into any worker's window to steer it directly.
+You can type into any worker's window to steer it directly. To select text with your
+terminal's own selection instead of tmux's, hold `Option` (iTerm2) or `Fn` (Terminal.app)
+while dragging.
+
+The status line at the bottom is deliberately quiet: your terminal's own colors, the window
+list (a worker waiting for input is highlighted), and the two keys you need most. Set
+`MAISTRO_TMUX_STATUS="off"` in `maistro.conf` to hide it, or `"tmux"` to keep your own tmux
+style. These settings apply only to the maistro session; your tmux configuration and
+other sessions are untouched.
 
 ## Configuration
 
@@ -161,12 +195,12 @@ Everything is in `.maistro/config/`:
 
 | File | What it controls |
 |---|---|
-| `maistro.conf` | Base branch, parallel cap, worker permission mode, worklog folder, merge method |
+| `maistro.conf` | Base branch, parallel cap, worker permission mode, review mode, merge method, tmux look and scrolling |
 | `dispatch.md` | Model-routing policy, in plain English. Maistro re-reads it every wave |
 | `plugin/skills/` | The bundled skills. Edit them to fit your team's practices |
 | `setup-worktree.sh` | Makes each fresh worktree runnable: copies `.env`, installs dependencies |
-| `maistro-settings.json` | Maistro's permissions: read and plan freely; no pushes, merges, or branch switches |
-| `worker-settings.json` | Worker permissions: commit and push their own branch; no force pushes or merges |
+| `maistro-settings.json` | Maistro's permissions: read freely, write only in `.maistro/`; no pushes, merges, or branch switches |
+| `worker-settings.json` | Worker permissions: commit and push their own branch; no force pushes or PR merges |
 
 Workers run in Claude Code's `auto` permission mode by default. If you prefer to approve
 their commands, set `MAISTRO_WORKER_PERMISSION_MODE="acceptEdits"`. Waiting workers are
@@ -183,13 +217,13 @@ Maistro uses these itself; they're also handy for you.
 | `maistro status [id]` | Task overview, or details plus the worker's live screen |
 | `maistro doctor` | Check dependencies and configuration |
 | `maistro stop` | Close the session (worktrees and branches are kept) |
-| `maistro uninstall` | Remove maistro from the repo (plans and branches are kept) |
+| `maistro uninstall` | Remove maistro from the repo (plans, worklogs and branches are kept) |
 | `maistro-task new <id> --ticket <plan>/<id>` | Create a task from a ticket (the ticket and spec go into the brief) |
 | `maistro-spawn <id> --model M --effort E` | Start a worker |
 | `maistro-wait` | Block until a worker needs attention |
 | `maistro-send <id> <msg>` | Message a worker |
-| `maistro-pr <id>` | Open the task's pull request |
-| `maistro-merge <id>` | Merge if open, conflict-free, and green (pinned to the verified head) |
+| `maistro-pr <id>` | Open the task's PR: on GitHub, or a local review without a remote |
+| `maistro-merge <id>` | Merge if conflict-free (and green on GitHub), pinned to the reviewed head |
 | `maistro-teardown <id>` | Close the worker and remove its worktree (commits stay on the branch) |
 | `maistro-ticket list\|frontier` | All tickets, or just the ones ready to start |
 | `maistro-ticket set <plan>/<id> status=...` | Update a ticket by hand |
@@ -197,13 +231,14 @@ Maistro uses these itself; they're also handy for you.
 
 ## Safety model
 
-- Maistro never edits product code, pushes, force-pushes, or switches branches in your
-  checkout. These are denied in its Claude Code permissions, not just in its prompt.
+- Maistro never writes outside `.maistro/`, pushes, force-pushes, or switches branches in
+  your checkout. These are denied in its Claude Code permissions, not just in its prompt.
 - `maistro-merge` is intentionally absent from Maistro's allowlist, so **Claude Code asks
-  you before every merge**. It also refuses drafts, conflicts, and any non-green check,
-  and pins the merge to the head commit it verified.
-- Workers can only push their own `maistro/<id>` branch. Force pushes, rebases, merges,
-  and branch deletion are denied.
+  you before every merge**. It refuses conflicts, drafts and non-green checks, and pins
+  the merge to the head commit it verified. Local merges never overwrite local changes
+  in your checkout.
+- Workers can only push their own `maistro/<id>` branch, and merge the base branch into it
+  to resolve conflicts. Force pushes, rebases, and branch deletion are denied.
 - Teardown never loses commits (they stay on the branch) and refuses to discard
   uncommitted work without `--force`.
 
@@ -211,7 +246,7 @@ Maistro uses these itself; they're also handy for you.
 
 ```bash
 npx @ajitsarkaar/maistro@latest upgrade   # update maistro; your config is kept
-maistro uninstall                         # remove it; your plans and branches are kept
+maistro uninstall                         # remove it; your plans, worklogs and branches are kept
 ```
 
 See [INSTALL.md](INSTALL.md#5-uninstall) for the details.
@@ -221,7 +256,7 @@ See [INSTALL.md](INSTALL.md#5-uninstall) for the details.
 - **More coding agents.** Everything agent-specific lives in one adapter,
   `.maistro/bin/harness/claude-code.sh`, so adding Codex, OpenCode, and others means
   adding one file each.
-- **Issue trackers.** Sync `plans/` tickets with GitHub Issues, then Linear and others.
+- **Issue trackers.** Sync `.maistro/plans/` tickets with GitHub Issues, then Linear and others.
 - `claude --bg` background sessions as an alternative to tmux
 - A turn-end hook so Maistro re-arms supervision automatically
 - Multi-repo crews and GitLab support

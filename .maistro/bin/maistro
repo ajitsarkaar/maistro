@@ -4,56 +4,55 @@
 . "$(dirname "$0")/lib.sh"
 
 do_attach() {
-  local s; s="$(session_name)"
-  if [ -n "${TMUX:-}" ]; then tmux switch-client -t "=$s"; else exec tmux attach -t "=$s"; fi
+    local s; s="$(session_name)"
+    if [ -n "${TMUX:-}" ]; then tmux switch-client -t "=$s"; else exec tmux attach -t "=$s"; fi
 }
 
 cmd="${1:-start}"
 case "$cmd" in
-  start)
-    require tmux "brew install tmux / apt install tmux"
-    load_harness
-    harness_check || die "$HARNESS_NAME is not installed or not on PATH"
-    require git
-    s="$(session_name)"
-    if tmux has-session -t "=$s" 2>/dev/null && tmux list-windows -t "=$s" -F '#{window_name}' | grep -qx maistro; then
-      info "Maistro is already running; attaching"
-      do_attach; exit 0
-    fi
-    mkdir -p "$MAISTRO_TASKS"
-    first=""
-    [ -f "$MAISTRO_STATE/.initialized" ] || first="Hello Maistro. This is a first run: please do the first-run setup."
-    harness_maistro_cmd "$first"
-    shell_cmd="export PATH=$(printf '%q' "$MAISTRO_BIN:$PATH"); $(printf '%q ' "${HARNESS_CMD[@]}"); exec \"\${SHELL:-bash}\""
-    envs=(-e "MAISTRO_HOME=$MAISTRO_HOME")
-    if tmux has-session -t "=$s" 2>/dev/null; then
-      tmux new-window -t "=$s:" -n maistro -c "$REPO_ROOT" "${envs[@]}" "$shell_cmd"
-    else
-      tmux new-session -d -s "$s" -n maistro -c "$REPO_ROOT" "${envs[@]}" "$shell_cmd"
-    fi
-    tmux select-window -t "=$s:maistro"
-    do_attach ;;
-  attach) do_attach ;;
-  stop)
-    s="$(session_name)"
-    tmux has-session -t "=$s" 2>/dev/null || die "no session $s"
-    printf 'This closes Maistro and every worker window in %s. Worktrees and branches are kept. Continue? [y/N] ' "$s"
-    read -r a; [ "$a" = y ] || [ "$a" = Y ] || exit 0
-    tmux kill-session -t "=$s" ;;
-  status) exec "$MAISTRO_BIN/maistro-status" "${@:2}" ;;
-  doctor) exec "$MAISTRO_BIN/maistro-doctor" ;;
-  uninstall) exec "$MAISTRO_BIN/maistro-uninstall" "${@:2}" ;;
-  help|-h|--help)
-    cat <<USAGE
+    start)
+        require tmux "brew install tmux / apt install tmux"
+        load_harness
+        harness_check || die "$HARNESS_NAME is not installed or not on PATH"
+        require git
+        s="$(session_name)"
+        if tmux has-session -t "=$s" 2>/dev/null \
+            && tmux list-windows -t "=$s" -F '#{window_name}' | grep -qx maistro; then
+            info "Maistro is already running; attaching"
+            do_attach; exit 0
+        fi
+        mkdir -p "$MAISTRO_TASKS"
+        first=""
+        [ -f "$MAISTRO_STATE/.initialized" ] \
+            || first="Hello Maistro. This is a first run: please do the first-run setup."
+        harness_maistro_cmd "$first"
+        shell_cmd="export PATH=$(printf '%q' "$MAISTRO_BIN:$PATH"); $(printf '%q ' "${HARNESS_CMD[@]}");"
+        shell_cmd+=" exec \"\${SHELL:-bash}\""
+        add_window maistro -c "$REPO_ROOT" -e "MAISTRO_HOME=$MAISTRO_HOME" "$shell_cmd"
+        tmux select-window -t "=$s:maistro"
+        do_attach ;;
+    attach) do_attach ;;
+    stop)
+        s="$(session_name)"
+        tmux has-session -t "=$s" 2>/dev/null || die "no session $s"
+        printf 'This closes Maistro and every worker window in %s. Worktrees and branches are kept. ' "$s"
+        printf 'Continue? [y/N] '
+        read -r a; [ "$a" = y ] || [ "$a" = Y ] || exit 0
+        tmux kill-session -t "=$s" ;;
+    status) exec "$MAISTRO_BIN/maistro-status" "${@:2}" ;;
+    doctor) exec "$MAISTRO_BIN/maistro-doctor" ;;
+    uninstall) exec "$MAISTRO_BIN/maistro-uninstall" "${@:2}" ;;
+    help|-h|--help)
+        cat <<USAGE
 maistro            start Maistro in tmux (or attach if running)
 maistro attach     attach to the running session
 maistro status     show all tasks
 maistro doctor     check dependencies and configuration
 maistro stop       close the session (worktrees and branches are kept)
-maistro uninstall  remove maistro from this repo (plans and branches are kept)
+maistro uninstall  remove maistro from this repo (plans, worklogs and branches are kept)
 
 Inside tmux: Ctrl-b w lists windows (Maistro + one per worker), Ctrl-b d detaches.
 USAGE
-    ;;
-  *) die "unknown command '$cmd' (try: maistro help)" ;;
+        ;;
+    *) die "unknown command '$cmd' (try: maistro help)" ;;
 esac

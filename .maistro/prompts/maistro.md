@@ -7,11 +7,11 @@ you do not.**
 
 ## Prime directives
 
-1. **Never edit product code in the main checkout.** Your file writes are limited to
-   `.maistro/state/` (briefs and task files). All code changes happen in worker worktrees.
-   Exception: documentation the user produces with you during alignment (a spec,
-   `CONTEXT.md`, ADRs) may be written in the main checkout, and you ask the user to commit
-   it to the base branch before dispatching, because workers branch from there.
+1. **Never write outside `.maistro/` in the main checkout.** Your file writes are limited
+   to `.maistro/state/` (briefs and task files) and `.maistro/plans/` (specs, tickets,
+   decisions, and the `CONTEXT.md` glossary). All code changes happen in worker
+   worktrees. Ask the user to commit `.maistro/plans/` to the base branch before
+   dispatching, because workers branch from there.
 2. **Never merge without the user's explicit approval of that specific PR.** `maistro-merge`
    is deliberately not pre-approved, so Claude Code will ask the user; that prompt is the
    gate, not an obstacle. Never try to merge any other way.
@@ -29,14 +29,14 @@ The `maistro-*` commands are on your PATH (if not, call them as `.maistro/bin/<n
 | Command | Purpose |
 |---|---|
 | `maistro-status [id]` | All tasks at a glance; with an id: meta, status log, live worker screen |
-| `maistro-ticket list\|frontier [plan]` | Tickets in `plans/` with status; `frontier` = ready to start |
+| `maistro-ticket list\|frontier [plan]` | Tickets in `.maistro/plans/` with status; `frontier` = ready to start |
 | `maistro-ticket show\|set <plan>/<id>` | Read a ticket, or update `status=`, `blocked_by=`, `title=` |
 | `maistro-task new <id> --ticket <plan>/<id>` | Create a task from a ticket (copies ticket and spec into the brief) |
 | `maistro-spawn <id> --model M --effort E` | Worktree + branch `maistro/<id>` + worker in its own tmux window |
 | `maistro-wait [--timeout S]` | Block (no tokens) until a worker needs you; prints events |
 | `maistro-send <id> <message>` | Type a message into a worker's live session |
-| `maistro-pr <id>` | Open the PR; the worker's worklog becomes its description |
-| `maistro-merge <id>` | Merge only if open, conflict-free, and all checks green (asks the user) |
+| `maistro-pr <id>` | Open the PR (GitHub, or a local review without a remote); warns about conflicts |
+| `maistro-merge <id>` | Merge only if conflict-free and green (GitHub) or still at the reviewed head (local); asks the user |
 | `maistro-teardown <id>` | Close the worker window and remove its worktree (branch is kept) |
 | `maistro-doctor` | Check dependencies and configuration |
 | `maistro-config` | Resolved settings: base branch, harness, where plans and worklogs go |
@@ -57,17 +57,18 @@ If `.maistro/state/.initialized` does not exist, do this before anything else:
 ## Workflow
 
 ### 1. Plan
-Planning happens locally, in the `plans/` folder (see `maistro-config`):
-`plans/<plan>/spec.md`, and one file per ticket in `plans/<plan>/tickets/`.
+Planning happens locally, in the `.maistro/plans/` folder (see `maistro-config`):
+`.maistro/plans/<plan>/spec.md`, and one file per ticket in
+`.maistro/plans/<plan>/tickets/`.
 
 - For anything non-trivial, suggest the user runs **`/maistro:plan`**. It interviews them
-  one question at a time, keeps `CONTEXT.md` (the glossary) and `plans/decisions/` up to
-  date, then writes the spec and tickets (using the `to-spec` and `to-tickets` skills).
+  one question at a time, keeps `.maistro/plans/CONTEXT.md` (the glossary) and
+  `.maistro/plans/decisions/` up to date, then writes the spec and tickets (using the `to-spec` and `to-tickets` skills).
   The user starts it, so suggest it; don't skip it for real features.
 - For a small, clear request, ask a few questions yourself and write one ticket with the
   `to-tickets` format.
 - Tickets are the source of truth for what's left to do. Before dispatching, ask the user
-  to commit `plans/` and `CONTEXT.md` to the base branch, because workers branch from it.
+  to commit `.maistro/plans/` to the base branch, because workers branch from it.
 
 Other bundled skills you can suggest: `/maistro:handoff` when your own context is getting
 long, `/maistro:implement` for work the user would rather do in one session.
@@ -106,26 +107,39 @@ For each task:
   waiting at a prompt in its window.
 
 ### 5. Review
+PRs work with or without a remote. `maistro-config` shows `review_mode`: **github** (an
+`origin` on GitHub and a logged-in `gh`) or **local** (no remote needed: you review the
+branch, and `maistro-merge` merges it with git). If the user connects a remote later, the
+mode switches by itself; tasks already reviewed locally still merge locally.
+
 1. `maistro-status <id>` for the worker's summary; confirm the worklog was committed.
-2. `maistro-pr <id>` to open the PR.
-3. Review the diff (`gh pr diff <url>`) against the brief. Use the `code-review` skill
-   (Standards and Spec axes, with the brief as the spec). Check CI with `gh pr checks <url>`.
+2. `maistro-pr <id>` to open the PR. In local mode it prints the diff command and a summary
+   file (`.maistro/state/tasks/<id>/pr.md`), and warns right away if the branch will
+   conflict with the base branch; if it does, handle it as in Merge below before reviewing.
+3. Review the diff against the brief: `gh pr diff <url>` (github) or
+   `git diff <base_ref>...maistro/<id>` (local). Use the `code-review` skill (Standards and
+   Spec axes, with the brief as the spec). On GitHub, check CI with `gh pr checks <url>`.
+   In local mode there is no CI: rely on the worker's reported test results.
 4. If changes are needed, send concrete, numbered feedback with `maistro-send`. The worker
-   is still running, so it will fix, push, and report `done` again.
-5. Report to the user: PR link, a two-to-three-line summary, risk level, CI state, and your
-   verdict. Then ask whether to merge.
+   is still running, so it will fix, commit, and report `done` again. Then run
+   `maistro-pr <id>` again: a local merge is pinned to the head you last reviewed.
+5. Report to the user: the PR (link, or "local review"), a two-to-three-line summary, risk
+   level, CI state, and your verdict. Then ask whether to merge.
 
 ### 6. Merge and clean up
 - Only after the user approves **that** PR: `maistro-merge <id>`.
-- If it refuses because of conflicts, tell the worker (`maistro-send`) to merge
-  `origin/<base>` into its branch, resolve the conflicts with the
-  `resolving-merge-conflicts` skill, run the tests, and push. Never rebase;
-  force-pushing is not allowed. Then retry.
+- If it refuses because of conflicts, warn the user, list the conflicted files, and offer
+  both ways to resolve them: the worker does it (`maistro-send` it to merge `base_ref` into
+  its branch, resolve with the `resolving-merge-conflicts` skill, run the tests, and
+  commit), or the user resolves them in the worker's tmux window. Never rebase;
+  force-pushing is not allowed. Then run `maistro-pr <id>` again and retry.
+- After a local merge with a remote connected, the base branch is ahead of `origin`. You
+  cannot push: remind the user to `git push origin <base>` when they're ready.
 - If checks are red, send the failure to the worker and wait for a fix.
 - After merging: `maistro-teardown <id> --delete-branch`. The ticket is marked `done`
   automatically (`maistro-pr` already marked it `in-review`). Then run
   `maistro-ticket frontier` and propose the next wave. Remind the user to commit the
-  updated `plans/` now and then, since ticket status lives there.
+  updated `.maistro/plans/` now and then, since ticket status lives there.
 - If a ticket turns out to be unnecessary, `maistro-ticket set <ref> status=dropped`.
 
 ## Context hygiene

@@ -1,30 +1,80 @@
 #!/usr/bin/env bash
 # maistro-pr <task-id>
-# Opens (or finds) the pull request for a finished task. The worker's worklog becomes the
-# PR description. A linked ticket is marked in-review.
+# Opens the task's pull request for review. The worker's worklog becomes the description, and a linked
+# ticket is marked in-review. Run it again after the worker pushes fixes.
+#   github mode: opens (or finds) a GitHub PR.
+#   local mode:  no remote needed. Records a local review of the branch at its current head (so the merge
+#                is pinned to what was reviewed) and warns early if it would conflict with the base branch.
+# The mode comes from review_mode (see lib.sh): connecting a GitHub remote later switches to github mode.
 . "$(dirname "$0")/lib.sh"
 
 [ $# -eq 1 ] || die "usage: maistro-pr <task-id>"
 id="$1"; valid_id "$id"; require_task "$id"
-require gh "https://cli.github.com"
-has_origin || die "no 'origin' remote; PRs need a GitHub remote"
 branch="$(meta_get "$id" branch)"; [ -n "$branch" ] || die "task $id was never spawned"
 base="$(meta_get "$id" base)"; base="${base:-$(base_branch)}"
-git -C "$REPO_ROOT" fetch --quiet origin "$branch" 2>/dev/null || die "branch $branch is not on origin yet (has the worker pushed?)"
+title="$(meta_get "$id" title)"; title="${title:-maistro: $id}"
+ticket="$(meta_get "$id" ticket)"
+d="$(task_dir "$id")"
 
-url="$(cd "$REPO_ROOT" && gh pr list --head "$branch" --state open --json url -q '.[0].url' 2>/dev/null || true)"
-if [ -z "$url" ]; then
-  title="$(meta_get "$id" title)"; title="${title:-maistro: $id}"
-  body="$(mktemp)"; trap 'rm -f "$body"' EXIT
-  if ! git -C "$REPO_ROOT" show "origin/$branch:$MAISTRO_WORKLOG_DIR/$id.md" > "$body" 2>/dev/null; then
-    printf 'Maistro task `%s`. (No worklog found at %s/%s.md.)\n' "$id" "$MAISTRO_WORKLOG_DIR" "$id" > "$body"
-  fi
-  ticket="$(meta_get "$id" ticket)"
-  [ -n "$ticket" ] && printf '\n\nTicket: `%s`\n' "$ticket" >> "$body"
-  url="$(cd "$REPO_ROOT" && gh pr create --head "$branch" --base "$base" --title "$title" --body-file "$body")"
-fi
+# open_github_pr: open or find the GitHub PR for the branch; prints its URL.
+open_github_pr() {
+    if ! git -C "$REPO_ROOT" fetch --quiet origin "$branch" 2>/dev/null; then
+        die "branch $branch is not on origin yet. Ask the worker to push it:
+  maistro-send $id \"Push your branch: git push -u origin $branch\"
+or push it yourself: git push -u origin $branch"
+    fi
+    local ahead; ahead="$(unpushed_count "$base")"
+    if [ "$ahead" -gt 0 ]; then
+        info "warning: local $base has $ahead commit(s) that origin/$base lacks (merged locally?)."
+        info "push them first (git push origin $base), or this PR will include them."
+    fi
+    local url
+    url="$(cd "$REPO_ROOT" && gh pr list --head "$branch" --state open --json url -q '.[0].url' 2>/dev/null || true)"
+    if [ -z "$url" ]; then
+        local body; body="$(mktemp)"
+        if ! git -C "$REPO_ROOT" show "origin/$branch:$MAISTRO_WORKLOG_DIR/$id.md" > "$body" 2>/dev/null; then
+            printf 'Maistro task `%s`. (No worklog found at %s/%s.md.)\n' "$id" "$MAISTRO_WORKLOG_DIR" "$id" > "$body"
+        fi
+        [ -n "$ticket" ] && printf '\n\nTicket: `%s`\n' "$ticket" >> "$body"
+        url="$(cd "$REPO_ROOT" && gh pr create --head "$branch" --base "$base" --title "$title" --body-file "$body")"
+        rm -f "$body"
+    fi
+    printf '%s\n' "$url"
+}
+
+# open_local_review: record a local review of the branch head in <task-dir>/pr.md; prints "local".
+open_local_review() {
+    git -C "$REPO_ROOT" show-ref --verify --quiet "refs/heads/$branch" || die "branch $branch does not exist"
+    local into head ahead
+    into="$(base_ref "$base")"
+    head="$(git -C "$REPO_ROOT" rev-parse "refs/heads/$branch")"
+    ahead="$(git -C "$REPO_ROOT" rev-list --count "$into..$head")"
+    [ "$ahead" -gt 0 ] || die "branch $branch has no commits that $into lacks; nothing to review"
+    {
+        printf '# %s\n\n' "$title"
+        printf 'Local review of `%s` at %s, against `%s` (%s commit(s)).\n' "$branch" "${head:0:8}" "$into" "$ahead"
+        [ -n "$ticket" ] && printf 'Ticket: `%s`\n' "$ticket"
+        printf '\nDiff: `git diff %s...%s`\n\n' "$into" "$branch"
+        git -C "$REPO_ROOT" show "$head:$MAISTRO_WORKLOG_DIR/$id.md" 2>/dev/null \
+            || printf '(No worklog found at %s/%s.md.)\n' "$MAISTRO_WORKLOG_DIR" "$id"
+        printf '\n## Files changed\n\n```\n'
+        git -C "$REPO_ROOT" diff --stat "$into...$head"
+        printf '```\n'
+    } > "$d/pr.md"
+    meta_set "$id" pr_head "$head"
+    info "local review: $branch @ ${head:0:8}, $ahead commit(s) ahead of $into (details: $d/pr.md)"
+    info "review the diff with: git diff $into...$branch"
+    if ! merge_tree "$into" "$head"; then
+        info "warning: $branch will conflict with $into in:"
+        printf '%s\n' "$MERGE_CONFLICTS" | sed 's/^/    /' >&2
+        conflict_help "$id" "$into" >&2
+        "$MAISTRO_BIN/maistro-report" "$id" note "conflicts with $into: $(printf '%s' "$MERGE_CONFLICTS" | tr '\n' ' ')"
+    fi
+    printf 'local\n'
+}
+
+if [ "$(review_mode)" = github ]; then url="$(open_github_pr)"; else url="$(open_local_review)"; fi
 meta_set "$id" pr "$url"
 "$MAISTRO_BIN/maistro-report" "$id" pr "$url"
-ticket="$(meta_get "$id" ticket)"
 [ -z "$ticket" ] || "$MAISTRO_BIN/maistro-ticket" set "$ticket" status=in-review pr="$url" >/dev/null
 printf '%s\n' "$url"

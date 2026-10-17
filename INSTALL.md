@@ -15,37 +15,45 @@ want to work in. It doesn't install anything into your global Claude Code setup.
 | Tool | Why | Required? |
 |---|---|---|
 | [Claude Code](https://code.claude.com) | Runs Maistro and every worker | Yes |
-| git | Worktrees and branches for each worker | Yes |
+| git 2.38+ | Worktrees, branches, and local merges | Yes |
 | tmux | One window per agent | Yes |
-| bash 4+ | The maistro scripts | Yes (macOS ships an old bash 3.2; the Homebrew step below adds a current one) |
+| bash | The maistro scripts | Yes (any version, including macOS's built-in bash 3.2) |
 | Node.js 18+ | The `npx` installer | Only for the npm install methods |
-| GitHub CLI (`gh`) and `jq` | Opening and merging pull requests | For PRs; planning and building work without them |
+| GitHub CLI (`gh`) | Pull requests on GitHub | No. Without it (or without a remote), maistro reviews and merges locally |
+
+You don't need a GitHub remote to start. Without one, maistro reviews each worker's branch
+locally and merges it with git, warning you about conflicts and helping you resolve them.
+Connect a remote whenever you like (`git remote add origin <url>`, then `gh auth login`)
+and maistro switches to GitHub pull requests; work you merged locally carries over.
 
 **macOS** (with [Homebrew](https://brew.sh)):
 
 ```bash
-brew install git tmux bash node gh jq
+brew install tmux node     # git ships with the Xcode command line tools
+brew install gh            # optional: for GitHub pull requests
 ```
 
 **Ubuntu / Debian:**
 
 ```bash
-sudo apt update && sudo apt install -y git tmux jq
+sudo apt update && sudo apt install -y git tmux
 ```
 
 For Node.js, use a current version from [nodejs.org](https://nodejs.org/en/download) or
 [nvm](https://github.com/nvm-sh/nvm): the `nodejs` package in older Ubuntu releases is too
-old. For the GitHub CLI, follow [cli.github.com](https://github.com/cli/cli#installation).
+old. Ubuntu 22.04 ships git 2.34; for local merges, get a newer git from the
+[git-core PPA](https://launchpad.net/~git-core/+archive/ubuntu/ppa). For the GitHub CLI,
+follow [cli.github.com](https://github.com/cli/cli#installation).
 
 **Windows:** use [WSL](https://learn.microsoft.com/windows/wsl/install) and follow the
 Ubuntu steps inside it.
 
 Then install and log in to Claude Code (see [code.claude.com](https://code.claude.com)),
-and log in to GitHub if you'll use pull requests:
+and log in to GitHub if you'll use GitHub pull requests:
 
 ```bash
 claude --version     # confirm Claude Code is installed
-gh auth login        # optional: for pull requests
+gh auth login        # optional: for GitHub pull requests
 ```
 
 ## 2. Install maistro into a repository
@@ -121,6 +129,28 @@ This replaces maistro's scripts, prompts, templates and skills. Your settings in
 yours as `<file>.new` so you can compare and merge. Your plans and any running tasks are
 never touched. Commit the result: `git add .maistro && git commit -m "Upgrade maistro"`.
 
+To upgrade to the latest code on `main` before it's published to npm:
+`npx github:ajitsarkaar/maistro upgrade`.
+
+### Upgrading from 0.3 to 0.4
+
+0.4 keeps everything maistro writes inside `.maistro/`. After upgrading, from the repo root:
+
+1. Move your plans and worklogs in (skip any that don't exist):
+
+   ```bash
+   git mv plans .maistro/plans
+   git mv CONTEXT.md .maistro/plans/CONTEXT.md
+   git mv docs/worklogs .maistro/worklogs
+   ```
+
+2. Adopt the new permissions, or Maistro can't write plans: `mv
+   .maistro/config/maistro-settings.json.new .maistro/config/maistro-settings.json` (and
+   the same for `worker-settings.json.new`), re-applying any edits you had made.
+3. Optionally merge `maistro.conf.new` into `maistro.conf` to see the new settings (review
+   mode, tmux look and scrolling). The defaults apply even if you don't.
+4. Restart Maistro (`maistro stop`, then `maistro`) and commit.
+
 ## 5. Uninstall
 
 ### Remove maistro from a repository
@@ -137,10 +167,11 @@ It shows exactly what it will do and asks for confirmation, then:
 
 1. closes the tmux session (Maistro and every worker window)
 2. removes every worker checkout in `.maistro/worktrees/`
-3. deletes `.maistro/`
+3. deletes everything in `.maistro/` except your plans and worklogs
 
-It **keeps** everything that's yours: `plans/`, `CONTEXT.md`, the worklogs in
-`docs/worklogs/`, and every `maistro/*` branch with its commits. If a worker has
+It **keeps** everything that's yours: `.maistro/plans/` (specs, tickets, decisions and
+`CONTEXT.md`), the worklogs in `.maistro/worklogs/`, and every `maistro/*` branch with its
+commits. If a worker has
 uncommitted changes, it stops and tells you which one, so nothing is lost by accident.
 
 | Flag | Effect |
@@ -161,8 +192,8 @@ git add -A .maistro && git commit -m "Remove maistro"
 # maistro branches you pushed to GitHub
 git push origin --delete maistro/<task-id>
 
-# planning files, if you no longer want them (they're ordinary files in your repo)
-git rm -r plans CONTEXT.md docs/worklogs && git commit -m "Remove maistro plans"
+# plans and worklogs, if you no longer want them (they're ordinary files in .maistro/)
+git rm -r .maistro && git commit -m "Remove maistro plans"
 ```
 
 ### Remove the maistro command from your machine
@@ -193,6 +224,13 @@ where you ran `init`, or run `maistro init` first.
 
 **`is not inside a git repository`.** maistro needs git. Run `git init` (and make a first
 commit) first.
+
+**`local merges need git 2.38 or newer`.** Local reviews and merges use `git merge-tree`.
+Upgrade git, or connect a GitHub remote and log in with `gh auth login` to merge on GitHub.
+
+**I connected GitHub, but a task still shows a local review.** Tasks reviewed before you
+connected the remote keep merging locally. To move one to GitHub instead, push your base
+branch (`git push origin <base>`) and run `maistro-pr <id>` again: it opens a GitHub PR.
 
 **Workers can't run tests.** Their fresh checkout lacks your ignored files (`.env`,
 virtualenvs, `node_modules`). Fill in `.maistro/config/setup-worktree.sh`; Maistro offers

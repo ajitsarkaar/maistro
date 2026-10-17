@@ -1,6 +1,6 @@
 ---
 name: to-tickets
-description: Break a plan's spec into small tickets - thin end-to-end slices, each declaring which tickets block it - written as files in plans/<plan>/tickets/. Use at the end of a /maistro:plan session, or when the user wants work broken into tickets for parallel workers.
+description: Break a plan's spec into small tickets - thin end-to-end slices, each declaring which tickets block it - written as files in .maistro/plans/<plan>/tickets/. Use at the end of a /maistro:plan session, or when the user wants work broken into tickets for parallel workers.
 ---
 
 # To tickets
@@ -11,8 +11,8 @@ at the same time.
 
 ## Steps
 
-1. Read `plans/<plan>/spec.md` in full, and `CONTEXT.md` if it exists. Respect the
-   decisions in `plans/decisions/`.
+1. Read `.maistro/plans/<plan>/spec.md` in full, and `.maistro/plans/CONTEXT.md` if it
+   exists. Respect the decisions in `.maistro/plans/decisions/`.
 2. Look at the code in the affected areas.
 3. Look for **preparatory refactoring** that would make the feature simple to add. If it's
    worth doing, make it the first ticket.
@@ -20,8 +20,8 @@ at the same time.
    delivers, and what blocks it.
 5. Ask: Is the granularity right? Are the blockers right (each one truly needed first)?
    Should anything be merged or split? Iterate until the user approves.
-6. Write one file per ticket: `plans/<plan>/tickets/<id>-<slug>.md`, with ids `01`, `02`,
-   and so on, numbered so every blocker has a lower id than the tickets it blocks.
+6. Write one file per ticket: `.maistro/plans/<plan>/tickets/<id>-<slug>.md`, with ids
+   `01`, `02`, and so on, numbered so every blocker has a lower id than the tickets it blocks.
 7. Run `maistro-ticket list <plan>` to check the files parse, then
    `maistro-ticket frontier <plan>` to show which tickets can start right away.
 

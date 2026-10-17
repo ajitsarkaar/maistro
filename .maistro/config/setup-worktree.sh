@@ -8,7 +8,7 @@ wt="$1"; main="$2"
 
 # Copy untracked environment files the app or tests need.
 for f in .env .env.local .env.test; do
-  if [ -f "$main/$f" ]; then cp "$main/$f" "$wt/$f"; fi
+    if [ -f "$main/$f" ]; then cp "$main/$f" "$wt/$f"; fi
 done
 
 # Install dependencies. Uncomment what fits your stack:

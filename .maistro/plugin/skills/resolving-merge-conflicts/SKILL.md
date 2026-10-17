@@ -10,12 +10,13 @@ so nothing ever needs a force push.
 
 ## Steps
 
-1. Start (or continue) the merge: `git fetch origin && git merge origin/<base>` (the base
-   branch is in `maistro-config`). List the conflicted files with `git status`.
+1. Start (or continue) the merge. Run `git fetch origin` if the repo has a remote, then
+   `git merge <base_ref>`, with `base_ref` from `maistro-config` (`origin/<base>` or the
+   local `<base>`, whichever is newer). List the conflicted files with `git status`.
 2. For each conflicted hunk, **understand both sides before editing**:
    - What was your branch trying to do here? (Your commits, your brief.)
    - What was the base branch trying to do? Find the commit that changed it:
-     `git log -p origin/<base> -- <file>` and read its message and any linked PR.
+     `git log -p <base_ref> -- <file>` and read its message and any linked PR.
    - Decide the result that satisfies **both** intents. Usually that is a combination,
      not a choice of one side.
 3. Never resolve by blindly taking "ours" or "theirs" for a whole file. That silently

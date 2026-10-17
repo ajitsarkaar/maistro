@@ -16,24 +16,24 @@ HARNESS_CMD=()
 harness_check() { command -v claude >/dev/null 2>&1; }
 
 harness_maistro_cmd() {
-  HARNESS_CMD=(claude --name maistro
-    --plugin-dir "$MAISTRO_HOME/plugin"
-    --settings "$MAISTRO_HOME/config/maistro-settings.json"
-    --append-system-prompt-file "$MAISTRO_HOME/prompts/maistro.md")
-  [ -n "$MAISTRO_MAISTRO_MODEL" ] && HARNESS_CMD+=(--model "$MAISTRO_MAISTRO_MODEL")
-  [ -n "${1:-}" ] && HARNESS_CMD+=("$1")
-  return 0
+    HARNESS_CMD=(claude --name maistro
+        --plugin-dir "$MAISTRO_HOME/plugin"
+        --settings "$MAISTRO_HOME/config/maistro-settings.json"
+        --append-system-prompt-file "$MAISTRO_HOME/prompts/maistro.md")
+    [ -n "$MAISTRO_MAISTRO_MODEL" ] && HARNESS_CMD+=(--model "$MAISTRO_MAISTRO_MODEL")
+    [ -n "${1:-}" ] && HARNESS_CMD+=("$1")
+    return 0
 }
 
 harness_worker_cmd() {
-  local id="$1" model="$2" effort="$3" dir="$4" prompt="$5"
-  HARNESS_CMD=(claude --model "$model")
-  [ "$effort" = "default" ] || HARNESS_CMD+=(--effort "$effort")
-  HARNESS_CMD+=(--permission-mode "$MAISTRO_WORKER_PERMISSION_MODE"
-    --settings "$MAISTRO_HOME/config/worker-settings.json"
-    --append-system-prompt-file "$MAISTRO_HOME/prompts/worker.md"
-    --add-dir "$dir"
-    --plugin-dir "$MAISTRO_HOME/plugin"
-    --name "maistro-$id"
-    "$prompt")
+    local id="$1" model="$2" effort="$3" dir="$4" prompt="$5"
+    HARNESS_CMD=(claude --model "$model")
+    [ "$effort" = "default" ] || HARNESS_CMD+=(--effort "$effort")
+    HARNESS_CMD+=(--permission-mode "$MAISTRO_WORKER_PERMISSION_MODE"
+        --settings "$MAISTRO_HOME/config/worker-settings.json"
+        --append-system-prompt-file "$MAISTRO_HOME/prompts/worker.md"
+        --add-dir "$dir"
+        --plugin-dir "$MAISTRO_HOME/plugin"
+        --name "maistro-$id"
+        "$prompt")
 }

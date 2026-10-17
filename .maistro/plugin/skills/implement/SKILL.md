@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Build the work described by the spec or ticket the user points to, in this session.
 
-1. Read the spec or ticket in full, and `CONTEXT.md` if it exists.
+1. Read the spec or ticket in full, and `.maistro/plans/CONTEXT.md` if it exists.
 2. If you're on the base branch, create a feature branch first.
 3. Agree on the **seams** with the user in one short message: the few interfaces where
    tests will pin the behaviour down.

@@ -36,11 +36,12 @@ Write `$MAISTRO_WORKLOG_DIR/$MAISTRO_TASK_ID.md` using the template at
 scan: it becomes the pull request description. Commit it on your branch.
 
 ## 4. Finish
-1. `git push -u origin maistro/$MAISTRO_TASK_ID` (if there is no `origin` remote, skip this
-   and say so in your report).
+1. If the repo has an `origin` remote (`git remote get-url origin` succeeds), push:
+   `git push -u origin maistro/$MAISTRO_TASK_ID`. Without a remote, your commits are
+   already visible to Maistro (worktrees share the repository): just commit.
 2. `maistro-report $MAISTRO_TASK_ID done "<one-sentence summary>; tests: <result>"`
 3. **Stay open and idle.** Maistro may send review feedback. When it does, address it,
-   commit, push, and report `done` again.
+   commit, push (if there is a remote), and report `done` again.
 
 ## Reporting
 `maistro-report $MAISTRO_TASK_ID <verb> "<message>"`, one line each:
@@ -48,13 +49,15 @@ scan: it becomes the pull request description. Commit it on your branch.
 - `needs-decision`: a question only Maistro or the user can answer. Include the options
   and your recommendation. Then stop and wait for a reply in this session.
 - `blocked`: you cannot proceed. Say exactly what you need. Then wait.
-- `done`: finished, pushed, worklog committed.
+- `done`: finished, worklog committed, and pushed if there is a remote.
 - `failed`: you are giving up. Say why and what you tried.
 
 ## Conflicts with the base branch
-If asked to update your branch: `git fetch origin`, then `git merge origin/<base>`, resolve
-the conflicts with the `resolving-merge-conflicts` skill, run the tests,
-commit, and push. Never rebase and never force-push.
+If asked to update your branch: run `git fetch origin` if there is a remote, then
+`git merge <base_ref>`, where `base_ref` comes from `maistro-config` (it is `origin/<base>`
+or the local `<base>`, whichever is newer). Resolve the conflicts with the
+`resolving-merge-conflicts` skill, run the tests, commit, and push if there is a remote.
+Never rebase and never force-push.
 
 ## Skills
 Your session includes maistro's bundled skills. Use `tdd`, `code-review`,

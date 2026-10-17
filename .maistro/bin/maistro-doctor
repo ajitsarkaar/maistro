@@ -11,19 +11,43 @@ echo "maistro doctor: $REPO_ROOT"
 [ -f "$MAISTRO_HOME/VERSION" ] && echo "maistro version: $(cat "$MAISTRO_HOME/VERSION")"
 echo "required:"
 git -C "$REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1 && ok "git repository" || bad "not a git repository"
+if git -C "$REPO_ROOT" rev-parse --verify --quiet HEAD >/dev/null; then ok "repository has commits"
+else bad "the repository has no commits yet; workers branch from one (git add -A && git commit -m init)"; fi
 load_harness
 if harness_check; then ok "harness: $HARNESS_NAME"; else bad "harness: $HARNESS_NAME is not installed"; fi
 for c in git tmux; do
-  if command -v "$c" >/dev/null 2>&1; then ok "$c: $("$c" --version 2>/dev/null | head -n1 || "$c" -V 2>/dev/null)"
-  else bad "$c not found"; fi
+    if command -v "$c" >/dev/null 2>&1; then ok "$c: $("$c" --version 2>/dev/null | head -n1 || "$c" -V 2>/dev/null)"
+    else bad "$c not found"; fi
 done
 
-echo "for PRs and merges:"
-if command -v gh >/dev/null 2>&1; then
-  if gh auth status >/dev/null 2>&1; then ok "gh authenticated"; else warn "gh installed but not logged in (run: gh auth login)"; fi
-else warn "gh not found (https://cli.github.com); you can still build locally, but not open or merge PRs"; fi
-command -v jq >/dev/null 2>&1 && ok "jq" || warn "jq not found (needed by maistro-merge)"
-has_origin && ok "origin: $(git -C "$REPO_ROOT" remote get-url origin)" || warn "no 'origin' remote (local-only mode: no PRs)"
+# git_supports_merge_tree: true if git is 2.38 or newer, which local conflict checks and merges need.
+git_supports_merge_tree() {
+    local version major minor
+    version="$(git --version | sed -n 's/^git version \([0-9]*\)\.\([0-9]*\).*/\1 \2/p')"
+    read -r major minor <<< "$version"
+    [ "${major:-0}" -gt 2 ] || { [ "${major:-0}" -eq 2 ] && [ "${minor:-0}" -ge 38 ]; }
+}
+
+echo "reviews and merges:"
+mode="$(review_mode)"
+if [ "$mode" = github ]; then
+    ok "mode: github (PRs on $(git -C "$REPO_ROOT" remote get-url origin))"
+else
+    ok "mode: local (maistro reviews branches and merges them with git; no remote needed)"
+    if ! has_origin; then
+        ok "no remote yet; connect one any time (git remote add origin <url>) and maistro switches to GitHub PRs"
+    elif ! command -v gh >/dev/null 2>&1; then
+        warn "origin is set but gh is not installed; install it (https://cli.github.com) to use GitHub PRs"
+    elif ! gh auth token >/dev/null 2>&1; then
+        warn "origin is set but gh is not logged in; run gh auth login to use GitHub PRs"
+    fi
+    if git_supports_merge_tree; then ok "git supports local merges (2.38+)"
+    else bad "local merges need git 2.38 or newer ($(git --version))"; fi
+fi
+unpushed="$(unpushed_count "$(base_branch)")"
+if [ "$unpushed" -gt 0 ]; then
+    warn "local $(base_branch) has $unpushed commit(s) not on origin; push them: git push origin $(base_branch)"
+fi
 
 echo "configuration:"
 ok "base branch: $(base_branch)"
@@ -31,16 +55,18 @@ ok "max parallel workers: $MAISTRO_MAX_PARALLEL"
 ok "worker permission mode: $MAISTRO_WORKER_PERMISSION_MODE"
 ok "worklogs: $MAISTRO_WORKLOG_DIR/<task>.md"
 ok "tmux session: $(session_name)"
-[ -x "$MAISTRO_HOME/config/setup-worktree.sh" ] && ok "setup-worktree.sh is executable" || warn "config/setup-worktree.sh is missing or not executable"
-if git -C "$REPO_ROOT" check-ignore -q "$MAISTRO_HOME/state/x" 2>/dev/null; then ok "state/ and worktrees/ are git-ignored"
+if [ -x "$MAISTRO_HOME/config/setup-worktree.sh" ]; then ok "setup-worktree.sh is executable"
+else warn "config/setup-worktree.sh is missing or not executable"; fi
+if git -C "$REPO_ROOT" check-ignore -q "$MAISTRO_HOME/state/x" 2>/dev/null; then
+    ok "state/ and worktrees/ are git-ignored"
 else warn ".maistro/state is not git-ignored (is .maistro/.gitignore present?)"; fi
 if [ -n "$(git -C "$REPO_ROOT" status --porcelain -- .maistro 2>/dev/null)" ]; then
-  warn ".maistro has uncommitted changes; commit it so your config travels with the repo"
+    warn ".maistro has uncommitted changes; commit it so your config and plans travel with the repo"
 fi
 
 n_skills="$(find "$MAISTRO_HOME/plugin/skills" -name SKILL.md 2>/dev/null | wc -l | tr -d ' ')"
 if [ -f "$MAISTRO_HOME/plugin/.claude-plugin/plugin.json" ] && [ "$n_skills" -gt 0 ]; then
-  ok "bundled skills: $n_skills (use as /maistro:<skill>)"
+    ok "bundled skills: $n_skills (use as /maistro:<skill>)"
 else bad "bundled skills plugin missing at .maistro/plugin"; fi
 ok "plans folder: $MAISTRO_PLANS_DIR/ (specs and tickets)"
 

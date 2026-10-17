@@ -7,14 +7,14 @@
 
 id=""; model=""; effort=""; base=""
 while [ $# -gt 0 ]; do
-  case "$1" in
-    --model)  model="${2:-}"; shift 2 ;;
-    --effort) effort="${2:-}"; shift 2 ;;
-    --base)   base="${2:-}"; shift 2 ;;
-    -h|--help) die "usage: maistro-spawn <task-id> --model MODEL --effort EFFORT [--base BRANCH]" ;;
-    -*) die "unknown flag: $1" ;;
-    *) id="$1"; shift ;;
-  esac
+    case "$1" in
+        --model)  model="${2:-}"; shift 2 ;;
+        --effort) effort="${2:-}"; shift 2 ;;
+        --base)   base="${2:-}"; shift 2 ;;
+        -h|--help) die "usage: maistro-spawn <task-id> --model MODEL --effort EFFORT [--base BRANCH]" ;;
+        -*) die "unknown flag: $1" ;;
+        *) id="$1"; shift ;;
+    esac
 done
 valid_id "$id"; require_task "$id"
 [ -n "$model" ]  || die "--model is required (see .maistro/config/dispatch.md)"
@@ -33,30 +33,31 @@ window_alive "$id" && die "a tmux window named '$id' is already running"
 # Respect the parallelism cap.
 live=0
 if [ -d "$MAISTRO_TASKS" ]; then
-  for t in "$MAISTRO_TASKS"/*/; do
-    [ -d "$t" ] || continue
-    if window_alive "$(basename "$t")"; then live=$((live + 1)); fi
-  done
+    for t in "$MAISTRO_TASKS"/*/; do
+        [ -d "$t" ] || continue
+        if window_alive "$(basename "$t")"; then live=$((live + 1)); fi
+    done
 fi
-[ "$live" -lt "$MAISTRO_MAX_PARALLEL" ] || die "parallel cap reached ($live/$MAISTRO_MAX_PARALLEL live workers); wait or raise MAISTRO_MAX_PARALLEL"
+[ "$live" -lt "$MAISTRO_MAX_PARALLEL" ] \
+    || die "parallel cap reached ($live/$MAISTRO_MAX_PARALLEL live workers); wait or raise MAISTRO_MAX_PARALLEL"
 
 base="${base:-$(meta_get "$id" base)}"; base="${base:-$(base_branch)}"
 mkdir -p "$MAISTRO_WORKTREES"
 if git -C "$REPO_ROOT" show-ref --verify --quiet "refs/heads/$branch"; then
-  git -C "$REPO_ROOT" worktree add --quiet "$wt" "$branch"
-  start="existing $branch"
+    git -C "$REPO_ROOT" worktree add --quiet "$wt" "$branch"
+    start="existing $branch"
 else
-  start="$base"
-  if has_origin; then
-    if git -C "$REPO_ROOT" fetch --quiet origin "$base" 2>/dev/null; then start="origin/$base"
-    else info "could not fetch origin/$base; branching from local $base"; fi
-  fi
-  git -C "$REPO_ROOT" worktree add --quiet -b "$branch" "$wt" "$start"
+    if has_origin && ! git -C "$REPO_ROOT" fetch --quiet origin "$base" 2>/dev/null; then
+        info "could not fetch origin/$base; branching from what is already here"
+    fi
+    # Newest of local <base> and origin/<base>, so work merged locally (or on GitHub) is never left out.
+    start="$(base_ref "$base")"
+    git -C "$REPO_ROOT" worktree add --quiet -b "$branch" "$wt" "$start"
 fi
 
 hook="$MAISTRO_HOME/config/setup-worktree.sh"
 if [ -x "$hook" ]; then
-  "$hook" "$wt" "$REPO_ROOT" || die "setup-worktree.sh failed; worktree left at $wt for inspection"
+    "$hook" "$wt" "$REPO_ROOT" || die "setup-worktree.sh failed; worktree left at $wt for inspection"
 fi
 
 meta_set "$id" branch "$branch"
@@ -67,19 +68,19 @@ meta_set "$id" effort "$effort"
 meta_set "$id" spawned "$(now)"
 rm -f "$MAISTRO_STATE/.cursor/$id.exited"
 
-ensure_session
 s="$(session_name)"
 prompt="You are the Maistro worker for task '$id'. Your brief is at $d/brief.md. Read it, then begin."
 harness_worker_cmd "$id" "$model" "$effort" "$d" "$prompt"
 # Set PATH inside the command: some shells reset a PATH passed through tmux -e.
-shell_cmd="export PATH=$(printf '%q' "$MAISTRO_BIN:$PATH"); $(printf '%q ' "${HARNESS_CMD[@]}"); exec \"\${SHELL:-bash}\""
+shell_cmd="export PATH=$(printf '%q' "$MAISTRO_BIN:$PATH"); $(printf '%q ' "${HARNESS_CMD[@]}");"
+shell_cmd+=" exec \"\${SHELL:-bash}\""
 
-tmux new-window -d -t "=$s:" -n "$id" -c "$wt" \
-  -e "MAISTRO_HOME=$MAISTRO_HOME" \
-  -e "MAISTRO_TASK_ID=$id" \
-  -e "MAISTRO_TASK_DIR=$d" \
-  -e "MAISTRO_WORKLOG_DIR=$MAISTRO_WORKLOG_DIR" \
-  "$shell_cmd"
+add_window "$id" -c "$wt" \
+    -e "MAISTRO_HOME=$MAISTRO_HOME" \
+    -e "MAISTRO_TASK_ID=$id" \
+    -e "MAISTRO_TASK_DIR=$d" \
+    -e "MAISTRO_WORKLOG_DIR=$MAISTRO_WORKLOG_DIR" \
+    "$shell_cmd"
 
 "$MAISTRO_BIN/maistro-report" "$id" spawned "$model/$effort on $branch from $start"
 printf 'spawned %s: %s/%s, branch %s, tmux window %s:%s\n' "$id" "$model" "$effort" "$branch" "$s" "$id"

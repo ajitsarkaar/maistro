@@ -1,40 +1,108 @@
 #!/usr/bin/env bash
 # maistro-merge <task-id>
-# Merges a task's PR only if it is open, not a draft, conflict-free, and every check is
-# green at the current head. The merge is pinned to the verified head commit, so a push
-# that lands after the check cannot sneak in.
-# This command is intentionally NOT on Maistro's permission allowlist: Claude Code asks
-# the human before every merge.
+# Merges a task's reviewed PR. This command is intentionally NOT on Maistro's permission allowlist:
+# Claude Code asks the human before every merge.
+#   GitHub PR: only if it is open, not a draft, conflict-free, and every check is green at the current
+#              head. The merge is pinned to the verified head commit, so a later push cannot sneak in.
+#   Local review (no remote needed): only if the branch is still at the reviewed head, the worker has no
+#              uncommitted work, and it merges into the base branch without conflicts. The merge is done in
+#              memory and the base branch only moves forward, so local changes in your checkout are never
+#              overwritten.
+# How a task merges follows its PR (see maistro-pr), not the current mode.
 . "$(dirname "$0")/lib.sh"
 
 [ $# -eq 1 ] || die "usage: maistro-merge <task-id>"
 id="$1"; valid_id "$id"; require_task "$id"
-require gh "https://cli.github.com"; require jq
-url="$(meta_get "$id" pr)"; [ -n "$url" ] || die "no PR recorded for $id; run maistro-pr $id first"
+pr="$(meta_get "$id" pr)"; [ -n "$pr" ] || die "no PR recorded for $id; run maistro-pr $id first"
+branch="$(meta_get "$id" branch)"
+base="$(meta_get "$id" base)"; base="${base:-$(base_branch)}"
 
-json="$(cd "$REPO_ROOT" && gh pr view "$url" --json state,isDraft,mergeable,headRefOid,statusCheckRollup)"
-state="$(jq -r .state <<<"$json")"
-[ "$state" = "OPEN" ] || die "PR is $state, not OPEN"
-[ "$(jq -r .isDraft <<<"$json")" = "false" ] || die "PR is a draft"
-mergeable="$(jq -r .mergeable <<<"$json")"
-case "$mergeable" in
-  MERGEABLE) ;;
-  CONFLICTING) die "PR has conflicts; ask the worker to merge origin/<base> into its branch and push" ;;
-  *) die "GitHub reports mergeable=$mergeable; retry in a moment" ;;
+# finish <where>: record the merge and mark the ticket done.
+finish() {
+    "$MAISTRO_BIN/maistro-report" "$id" merged "$1"
+    local ticket; ticket="$(meta_get "$id" ticket)"
+    [ -z "$ticket" ] || "$MAISTRO_BIN/maistro-ticket" set "$ticket" status=done >/dev/null
+    echo "merged $id: $1"
+}
+
+# merge_github: merge the GitHub PR through gh, after checking it is safe.
+merge_github() {
+    require gh "https://cli.github.com"
+    local fields state draft mergeable sha total bad
+    fields="$(cd "$REPO_ROOT" && gh pr view "$pr" --json state,isDraft,mergeable,headRefOid,statusCheckRollup \
+        --jq '[.state, (.isDraft | tostring), .mergeable, .headRefOid,
+               ([.statusCheckRollup[]?] | length | tostring),
+               ([.statusCheckRollup[]? |
+                    {n: (.name // .context // "check"),
+                     r: (if ((.conclusion // "") != "") then .conclusion else (.state // .status // "PENDING") end)}
+                 | select(.r != "SUCCESS" and .r != "SKIPPED" and .r != "NEUTRAL")
+                 | "\(.n)=\(.r)"] | join(", "))] | @tsv')"
+    IFS=$'\t' read -r state draft mergeable sha total bad <<< "$fields"
+    [ "$state" = "OPEN" ] || die "PR is $state, not OPEN"
+    [ "$draft" = "false" ] || die "PR is a draft"
+    case "$mergeable" in
+        MERGEABLE) ;;
+        CONFLICTING) die "PR has conflicts with $base.
+$(conflict_help "$id" "origin/$base")" ;;
+        *) die "GitHub reports mergeable=$mergeable; retry in a moment" ;;
+    esac
+    [ -z "$bad" ] || die "checks are not green: $bad"
+    [ "$total" -gt 0 ] || info "warning: this PR has no CI checks; merging on review alone"
+    (cd "$REPO_ROOT" && gh pr merge "$pr" "--$MAISTRO_MERGE_METHOD" --match-head-commit "$sha")
+    finish "$pr @ ${sha:0:8}"
+    git -C "$REPO_ROOT" fetch --quiet origin 2>/dev/null || true
+}
+
+# merge_local: merge the reviewed branch head into the local base branch with plain git.
+merge_local() {
+    git -C "$REPO_ROOT" show-ref --verify --quiet "refs/heads/$base" || die "base branch $base does not exist locally"
+    local head reviewed wt
+    head="$(git -C "$REPO_ROOT" rev-parse "refs/heads/$branch")"
+    reviewed="$(meta_get "$id" pr_head)"
+    [ "$head" = "$reviewed" ] \
+        || die "$branch has changed since it was reviewed (${reviewed:0:8} -> ${head:0:8}); run maistro-pr $id again"
+    wt="$(meta_get "$id" worktree)"
+    if [ -d "$wt" ] && [ -n "$(git -C "$wt" status --porcelain 2>/dev/null)" ]; then
+        die "the worker has uncommitted changes in $wt; ask it to commit them, then run maistro-pr $id again"
+    fi
+
+    local base_sha; base_sha="$(git -C "$REPO_ROOT" rev-parse "refs/heads/$base")"
+    if ! merge_tree "$base_sha" "$head"; then
+        die "$branch conflicts with $base in:
+$(printf '%s\n' "$MERGE_CONFLICTS" | sed 's/^/    /')
+$(conflict_help "$id" "$base")"
+    fi
+
+    local title method commit
+    title="$(meta_get "$id" title)"; title="${title:-maistro: $id}"
+    method="$MAISTRO_MERGE_METHOD"
+    if [ "$method" = rebase ]; then info "rebase merges need GitHub; squashing instead"; method=squash; fi
+    if [ "$method" = merge ]; then
+        commit="$(git -C "$REPO_ROOT" commit-tree "$MERGE_TREE" -p "$base_sha" -p "$head" \
+            -m "Merge $branch: $title")"
+    else
+        commit="$(git -C "$REPO_ROOT" commit-tree "$MERGE_TREE" -p "$base_sha" \
+            -m "$title" -m "Squashed from $branch (maistro task $id).")"
+    fi
+
+    # Move the base branch forward to the new commit. Where it is checked out, a fast-forward updates the
+    # files too, and git refuses (changing nothing) if that would overwrite local changes.
+    local checkout; checkout="$(worktree_of "$base")"
+    if [ -n "$checkout" ]; then
+        git -C "$checkout" merge --ff-only --quiet "$commit" \
+            || die "could not update $base in $checkout without overwriting local changes there.
+Commit or stash those changes, then run maistro-merge $id again."
+    else
+        git -C "$REPO_ROOT" update-ref "refs/heads/$base" "$commit" "$base_sha"
+    fi
+    finish "local $base @ ${commit:0:8}"
+    local ahead; ahead="$(unpushed_count "$base")"
+    if [ "$ahead" -gt 0 ]; then
+        info "local $base is $ahead commit(s) ahead of origin; push when ready: git push origin $base"
+    fi
+}
+
+case "$pr" in
+    local) merge_local ;;
+    *) merge_github ;;
 esac
-total="$(jq '[.statusCheckRollup[]?] | length' <<<"$json")"
-bad="$(jq -r '[.statusCheckRollup[]? |
-          {n: (.name // .context // "check"),
-           r: (if ((.conclusion // "") != "") then .conclusion else (.state // .status // "PENDING") end)}
-        | select(.r != "SUCCESS" and .r != "SKIPPED" and .r != "NEUTRAL")
-        | "\(.n)=\(.r)"] | join(", ")' <<<"$json")"
-[ -z "$bad" ] || die "checks are not green: $bad"
-[ "$total" -gt 0 ] || info "warning: this PR has no CI checks; merging on review alone"
-
-sha="$(jq -r .headRefOid <<<"$json")"
-(cd "$REPO_ROOT" && gh pr merge "$url" "--$MAISTRO_MERGE_METHOD" --match-head-commit "$sha")
-"$MAISTRO_BIN/maistro-report" "$id" merged "$url @ ${sha:0:8}"
-ticket="$(meta_get "$id" ticket)"
-[ -z "$ticket" ] || "$MAISTRO_BIN/maistro-ticket" set "$ticket" status=done >/dev/null
-has_origin && git -C "$REPO_ROOT" fetch --quiet origin 2>/dev/null || true
-echo "merged $url"

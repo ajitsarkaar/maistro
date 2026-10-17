@@ -22,8 +22,8 @@ neither review colours the other. Give each subagent the diff, the axis instruct
 below, and (for Spec) the intent. Otherwise, do the two passes one after the other.
 
 ### Standards: is it well written?
-- Follows the repo's conventions: read nearby code, `CONTEXT.md` terms, lint config, and
-  any contributing guide.
+- Follows the repo's conventions: read nearby code, `.maistro/plans/CONTEXT.md` terms,
+  lint config, and any contributing guide.
 - Correctness risks: error handling, null and empty cases, off-by-one, resource cleanup,
   concurrency, injection and other security issues.
 - Common smells: long functions, duplicated logic, unclear names, feature envy, deep

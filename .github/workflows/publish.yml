@@ -1,6 +1,7 @@
-# Publishes @ajitsarkaar/maistro to npm when you push a version tag (e.g. v0.3.0).
-# One-time setup: create an npm "Automation" token and add it to this repo as the
-# NPM_TOKEN secret (Settings > Secrets and variables > Actions).
+# Publishes @ajitsarkaar/maistro to npm when you push a version tag (e.g. v0.4.0).
+# Uses npm trusted publishing: npm trusts this workflow through GitHub's OIDC token, so no npm
+# token is stored anywhere. One-time setup on npmjs.com: package Settings > Trusted Publisher >
+# GitHub Actions, with repository ajitsarkaar/maistro and workflow publish.yml.
 name: Publish to npm
 
 on:
@@ -9,17 +10,19 @@ on:
 
 permissions:
     contents: read
-    id-token: write   # lets npm show a verified provenance badge
+    id-token: write   # lets npm verify this workflow and sign the provenance statement
 
 jobs:
     publish:
         runs-on: ubuntu-latest
         steps:
-            -   uses: actions/checkout@v4
-            -   uses: actions/setup-node@v4
+            -   uses: actions/checkout@v5
+            -   uses: actions/setup-node@v5
                 with:
-                    node-version: 22
+                    node-version: 24
                     registry-url: https://registry.npmjs.org
+            -   name: Use an npm that supports trusted publishing (11.5.1+)
+                run: npm install -g npm@11
             -   name: Check the tag matches package.json
                 run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
             -   name: Lint shell scripts
@@ -28,5 +31,3 @@ jobs:
                     shellcheck -x -S warning install.sh .maistro/bin/lib.sh .maistro/bin/maistro* \
                         .maistro/bin/harness/*.sh .maistro/config/setup-worktree.sh
             -   run: npm publish --provenance --access public
-                env:
-                    NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
